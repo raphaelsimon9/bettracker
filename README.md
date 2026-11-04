@@ -1,4 +1,4 @@
-# Bet Ledger
+# Bet Tracker
 
 Static web app (no build step) + Supabase for login and sync. Installable on phone and laptop.
 
@@ -19,4 +19,4 @@ Then in Supabase → Authentication → URL Configuration, set Site URL to your 
 - iPhone (Safari): Share → Add to Home Screen.
 - Laptop (Chrome/Edge): install icon in the address bar.
 
-When you change files, bump `C` in `sw.js` (e.g. `bet-ledger-v2`) so devices pick up the update.
+When you change files, bump `C` in `sw.js` (e.g. `bet-tracker-v2`) so devices pick up the update.
