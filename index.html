@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bet Tracker</title>
-<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f9d58"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Bet Ledger">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f9d58"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Bet Tracker">
 <style>
 :root{--bg:#f4f6f3;--card:#fff;--ink:#12201a;--mute:#66756d;--line:#e2e8e3;--win:#0f9d58;--loss:#e5484d;--pend:#d99a00;--blue:#3b82f6;--inp:#f8faf8;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b110e;--card:#131b17;--ink:#e8f0ea;--mute:#8a9a91;--line:#223029;--win:#2fd27f;--loss:#ff6b70;--pend:#f0b429;--blue:#6aa3ff;--inp:#0e1512;color-scheme:dark}}
@@ -167,8 +167,8 @@ const sd=b=>b.settledDate||b.betDate;
 /* ---------- render ---------- */
 function render(){renderReport();renderBets();renderDeps();lists()}
 function lists(){
- const P=[...new Set(["Sportybet","Bet9ja","Football.com","Stake","1xBet",...D.map(x=>x.platform)])];
- const B=[...new Set(["GTBank","Access Bank","Zenith Bank","UBA","First Bank","Kuda","Opay","Moniepoint","Stanbic IBTC",...deps().map(x=>x.bank)])];
+ const P=[...new Set(["Football.com","Sportybet","Bet9ja","Stake","1xBet",...D.map(x=>x.platform)])];
+ const B=[...new Set(["Stanbic IBTC","UBA","First Bank","Opay","GTBank","Access Bank","Zenith Bank","Kuda","Moniepoint",...deps().map(x=>x.bank)])];
  OPT.pl=P;OPT.bk=B;
 }
 function renderBets(){
