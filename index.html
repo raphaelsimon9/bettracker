@@ -164,8 +164,8 @@ const sd=b=>b.settledDate||b.betDate;
 /* ---------- render ---------- */
 function render(){renderReport();renderBets();renderDeps();lists()}
 function lists(){
- const P=[...new Set(["Sportybet","Bet9ja","Football.com","Stake","1xBet",...D.map(x=>x.platform)])];
- const B=[...new Set(["GTBank","Access Bank","Zenith Bank","UBA","First Bank","Kuda","Opay","Moniepoint","Stanbic IBTC",...deps().map(x=>x.bank)])];
+ const P=[...new Set(["Football.com","Sportybet","Bet9ja","Stake","1xBet",...D.map(x=>x.platform)])];
+ const B=[...new Set(["Stanbic IBTC","UBA","First Bank","Opay","GTBank","Access Bank","Zenith Bank","Kuda","Moniepoint",...deps().map(x=>x.bank)])];
  OPT.pl=P;OPT.bk=B;
 }
 function renderBets(){
