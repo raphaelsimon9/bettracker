@@ -52,6 +52,11 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .cb{position:absolute;right:2px;top:2px;bottom:2px;width:40px;border:0;background:none;color:var(--mute);font-size:15px;cursor:pointer;border-radius:8px}
 .cl{position:absolute;z-index:30;left:0;right:0;top:100%;margin-top:4px;max-height:220px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px #0005;padding:4px}
 .cl .o{display:block;padding:12px 10px;border-radius:8px;color:var(--ink);font-size:15px;cursor:pointer}.cl .o:active,.cl .o:hover{background:var(--inp)}
+.fg{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.fl{font-size:12px;color:var(--mute);min-width:64px}
+.chip{border:1px solid var(--line);background:var(--inp);color:var(--mute);padding:7px 13px;border-radius:99px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--win);border-color:var(--win);color:#fff}.fd{width:auto;padding:6px 8px}
+.fsum{margin:4px 0 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cnt{display:flex;gap:4px 14px;flex-wrap:wrap;margin-top:6px}.cnt div{font-size:12px;color:var(--mute)}.cnt b{display:block;font-size:20px;line-height:1.2}
 .hide{display:none}
 </style></head><body>
 <div id="auth" class="auth hide"><div class="card"><h1>Bet <span>Tracker</span></h1><div class="sub">Sign in to see your data on any device.</div>
@@ -90,6 +95,9 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
    <div class="prev" id="bprev"></div>
    <div style="display:flex;gap:8px"><button class="btn" id="bsave">Add bet</button><button type="button" class="btn g hide" id="bcancel">Cancel</button></div>
   </form>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <div id="bfil"></div>
   <div class="tw"><table><thead><tr><th>Bet date</th><th>Platform</th><th>Wagered</th><th>Odds</th><th>Bonus</th><th>Result</th><th>Win amount</th><th>Profit/loss</th><th>Settled</th><th></th></tr></thead><tbody id="btb"></tbody></table></div>
  </div>
 </section>
@@ -103,6 +111,9 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
    <label>Bank deposited from<span class="combo"><input name="bank" data-list="bk" autocomplete="off" required><button type="button" class="cb" tabindex="-1" aria-label="Show options">▾</button><span class="cl hide"></span></span></label>
    <div style="display:flex;gap:8px"><button class="btn" id="dsave">Add deposit</button><button type="button" class="btn g hide" id="dcancel">Cancel</button></div>
   </form>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <div id="dfil"></div>
   <div class="tw"><table><thead><tr><th>Date</th><th>Amount</th><th>Platform</th><th>Bank</th><th></th></tr></thead><tbody id="dtb"></tbody></table></div>
  </div>
 </section>
@@ -115,7 +126,7 @@ const CUR="₦";
 const $=s=>document.querySelector(s);
 const money=n=>(n<0?"−":"")+CUR+Math.abs(n).toLocaleString("en-NG",{maximumFractionDigits:2});
 const sgn=n=>(n>0?"+":"")+money(n);
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 let OPT={pl:[],bk:[]},D=[],charts=[],editB=null,editD=null;
@@ -128,7 +139,7 @@ async function pull(){
  $("#sync").textContent="Syncing…";
  const [b,d]=await Promise.all([SB.from("bets").select("*"),SB.from("deposits").select("*")]);
  if(b.error||d.error){$("#sync").textContent="Couldn’t load — check your connection";return}
- D=[...b.data.map(toBet),...d.data.map(toDep)];$("#sync").textContent="Synced · v5";render();
+ D=[...b.data.map(toBet),...d.data.map(toDep)];$("#sync").textContent="Synced · v6";render();
 }
 const fail=r=>{alert("Couldn’t save: "+r.error.message);pull()};
 const store={
@@ -167,19 +178,57 @@ const pl=b=>b.status==="won"?winAmt(b)-b.stake:b.status==="lost"?-b.stake:b.stat
 const sd=b=>b.settledDate||b.betDate;
 
 /* ---------- render ---------- */
-function render(){renderReport();renderBets();renderDeps();lists()}
+function render(){lists();renderReport();renderBets();renderDeps()}
 function lists(){
  const P=[...new Set(["Football.com","Sportybet","Bet9ja","Stake","1xBet",...D.map(x=>x.platform)])];
  const B=[...new Set(["Stanbic IBTC","UBA","First Bank","Opay","GTBank","Access Bank","Zenith Bank","Kuda","Moniepoint",...deps().map(x=>x.bank)])];
  OPT.pl=P;OPT.bk=B;
 }
+/* ---------- filters ---------- */
+const F0=()=>({b:{res:"all",plat:"all",date:"all",from:"",to:""},d:{plat:"all",bank:"all",date:"all",from:"",to:""}});
+const F=F0();
+const dAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+function inDate(x,f){const t=today();if(f.date==="today")return x===t;if(f.date==="7d")return x>=dAgo(6);if(f.date==="month")return x.slice(0,7)===t.slice(0,7);if(f.date==="custom")return(!f.from||x>=f.from)&&(!f.to||x<=f.to);return true}
+const chip=(g,k,v,l,on)=>`<button type="button" class="chip${on?" on":""}" data-g="${g}" data-k="${k}" data-v="${esc(v)}">${esc(l)}</button>`;
+const grp=(l,h)=>`<div class="fg"><span class="fl">${l}</span>${h}</div>`;
+const chips=(g,k,cur,items)=>chip(g,k,"all","All",cur==="all")+items.map(p=>chip(g,k,p,p,cur===p)).join("");
+function dateGrp(g,f){
+ const o=[["all","All time"],["today","Today"],["7d","Last 7 days"],["month","This month"],["custom","Custom"]];
+ return grp("Date",o.map(([v,l])=>chip(g,"date",v,l,f.date===v)).join("")+(f.date==="custom"?`<input type="date" class="fd" data-g="${g}" data-k="from" value="${f.from}"><span class="fl" style="min-width:0">to</span><input type="date" class="fd" data-g="${g}" data-k="to" value="${f.to}">`:""));
+}
+const fsum=(g,t,on)=>`<div class="sub fsum"><span>${t}</span>${on?`<button type="button" class="chip" data-g="${g}" data-k="clear">Clear filters</button>`:""}</div>`;
+function filtB(){
+ const f=F.b,B=bets(),pls=OPT.pl.filter(p=>B.some(b=>b.platform===p));
+ if(f.plat!=="all"&&!pls.includes(f.plat))f.plat="all";
+ const n=st=>B.filter(b=>b.status===st).length;
+ const R=[["all","All",B.length],["won","Wins",n("won")],["lost","Losses",n("lost")],["cashout","Cash out",n("cashout")],["pending","Pending",n("pending")]];
+ const r=B.filter(b=>(f.res==="all"||b.status===f.res)&&(f.plat==="all"||b.platform===f.plat)&&inDate(b.betDate,f));
+ const net=r.reduce((a,b)=>a+pl(b),0);
+ $("#bfil").innerHTML=grp("Platform",chips("b","plat",f.plat,pls))+dateGrp("b",f)+grp("Result",R.map(([v,l,c])=>chip("b","res",v,`${l} (${c})`,f.res===v)).join(""))
+  +fsum("b",`Showing ${r.length} of ${B.length} bets · Wagered ${money(r.reduce((a,b)=>a+b.stake,0))} · Net ${sgn(net)}`,f.res!=="all"||f.plat!=="all"||f.date!=="all");
+ return r;
+}
+function filtD(){
+ const f=F.d,A=deps(),pls=OPT.pl.filter(p=>A.some(d=>d.platform===p)),bks=OPT.bk.filter(p=>A.some(d=>d.bank===p));
+ if(f.plat!=="all"&&!pls.includes(f.plat))f.plat="all";if(f.bank!=="all"&&!bks.includes(f.bank))f.bank="all";
+ const r=A.filter(d=>(f.plat==="all"||d.platform===f.plat)&&(f.bank==="all"||d.bank===f.bank)&&inDate(d.date,f));
+ $("#dfil").innerHTML=dateGrp("d",f)+grp("Bank",chips("d","bank",f.bank,bks))+grp("Platform",chips("d","plat",f.plat,pls))
+  +fsum("d",`Showing ${r.length} of ${A.length} deposits · Total ${money(r.reduce((a,d)=>a+d.amount,0))}`,f.bank!=="all"||f.plat!=="all"||f.date!=="all");
+ return r;
+}
+document.addEventListener("click",e=>{
+ const c=e.target.closest(".chip");if(!c)return;const{g,k,v}=c.dataset;
+ if(k==="clear")F[g]=F0()[g];else F[g][k]=v;
+ renderBets();renderDeps();
+});
+document.addEventListener("change",e=>{const i=e.target;if(i.classList&&i.classList.contains("fd")){F[i.dataset.g][i.dataset.k]=i.value;renderBets();renderDeps()}});
 function renderBets(){
- const r=bets().sort((a,b)=>b.betDate.localeCompare(a.betDate));
- $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td><button class="ic" data-e="${b.id}">Edit</button><button class="ic" data-x="${b.id}">Delete</button></td></tr>`}).join(""):`<tr><td colspan="10" class="empty">No bets yet. Add your first one above.</td></tr>`;
+ const r=filtB().sort((a,b)=>b.betDate.localeCompare(a.betDate));
+ $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td><button class="ic" data-e="${b.id}">Edit</button><button class="ic" data-x="${b.id}">Delete</button></td></tr>`}).join(""):`<tr><td colspan="10" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
 }
 function renderDeps(){
- const r=deps().sort((a,b)=>b.date.localeCompare(a.date));
- $("#dtb").innerHTML=r.length?r.map(d=>`<tr><td>${d.date}</td><td>${money(d.amount)}</td><td>${esc(d.platform)}</td><td>${esc(d.bank)}</td><td><button class="ic" data-e="${d.id}">Edit</button><button class="ic" data-x="${d.id}">Delete</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">No deposits yet.</td></tr>`;
+ const r=filtD().sort((a,b)=>b.date.localeCompare(a.date));
+ $("#dtb").innerHTML=r.length?r.map(d=>`<tr><td>${d.date}</td><td>${money(d.amount)}</td><td>${esc(d.platform)}</td><td>${esc(d.bank)}</td><td><button class="ic" data-e="${d.id}">Edit</button><button class="ic" data-x="${d.id}">Delete</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">${deps().length?"No deposits match these filters.":"No deposits yet."}</td></tr>`;
 }
 function renderReport(){
  const B=bets(),S=B.filter(b=>b.status!=="pending"),W=S.filter(b=>b.status==="won"),L=S.filter(b=>b.status==="lost"),C=S.filter(b=>b.status==="cashout"),Pn=B.filter(b=>b.status==="pending");
@@ -188,7 +237,8 @@ function renderReport(){
  const k=(l,v,s,c="")=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
  const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),bal=dep+net-pendAmt;
  const hb=$("#hbal");hb.textContent=money(bal);hb.className="bv "+(bal>0?"pos":bal<0?"neg":"");
- $("#kpis").innerHTML=k("Net profit / loss",sgn(net),`${S.length} settled bets`,net>0?"pos":net<0?"neg":"")+k("Total deposited",money(dep),`${deps().length} deposits`)+k("Total wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} bets`)+k("Win rate",wr.toFixed(1)+"%",`${W.length} won · ${L.length} lost · ${C.length} cashed out`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","profit ÷ settled stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"added to winnings")+k("Pending",String(Pn.length),money(pendAmt)+" at stake");
+ $("#kpis").innerHTML=k("Net profit / loss",sgn(net),`<div class="cnt"><div><b class="pos">${W.length}</b>Won</div><div><b class="neg">${L.length}</b>Lost</div><div><b style="color:var(--blue)">${C.length}</b>Cashed out</div></div>`,net>0?"pos":net<0?"neg":"")+k("Total deposited",money(dep),`${deps().length} deposits`)+k("Total wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} bets`)+k("Win rate",wr.toFixed(1)+"%",`of ${S.length} settled bets`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","profit ÷ settled stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"added to winnings")+k("Pending",String(Pn.length),money(pendAmt)+" at stake");
+ $("#kpis").firstElementChild.style.gridColumn="span 2";
  const pb={};const row=p=>pb[p]=pb[p]||{d:0,n:0,s:0};
  deps().forEach(d=>row(d.platform).d+=d.amount);B.forEach(b=>{const r=row(b.platform);b.status==="pending"?r.s+=b.stake:r.n+=pl(b)});
  const pk2=Object.keys(pb).sort((a,b)=>(pb[b].d+pb[b].n-pb[b].s)-(pb[a].d+pb[a].n-pb[a].s));
