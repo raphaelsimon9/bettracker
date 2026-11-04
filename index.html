@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bet Ledger</title>
-<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f9d58"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Bet Ledger">
+<title>Bet Tracker</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f9d58"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Bet Tracker">
 <style>
 :root{--bg:#f4f6f3;--card:#fff;--ink:#12201a;--mute:#66756d;--line:#e2e8e3;--win:#0f9d58;--loss:#e5484d;--pend:#d99a00;--blue:#3b82f6;--inp:#f8faf8;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b110e;--card:#131b17;--ink:#e8f0ea;--mute:#8a9a91;--line:#223029;--win:#2fd27f;--loss:#ff6b70;--pend:#f0b429;--blue:#6aa3ff;--inp:#0e1512;color-scheme:dark}}
@@ -53,11 +53,11 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .cl .o{display:block;padding:12px 10px;border-radius:8px;color:var(--ink);font-size:15px;cursor:pointer}.cl .o:active,.cl .o:hover{background:var(--inp)}
 .hide{display:none}
 </style></head><body>
-<div id="auth" class="auth hide"><div class="card"><h1>Bet <span>Ledger</span></h1><div class="sub">Sign in to see your data on any device.</div>
+<div id="auth" class="auth hide"><div class="card"><h1>Bet <span>Tracker</span></h1><div class="sub">Sign in to see your data on any device.</div>
 <form id="af"><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="current-password" required></label><div id="amsg"></div><button class="btn" id="ain">Sign in</button><button type="button" class="btn g" id="aup">Create account</button></form></div></div>
 <div class="wrap hide" id="app">
 <header>
- <div><h1>Bet <span>Ledger</span></h1><div class="sub" id="sync">Loading…</div></div>
+ <div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
  <nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button></nav>
  <button class="btn g" id="out">Sign out</button>
 </header>
