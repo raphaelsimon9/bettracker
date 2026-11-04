@@ -52,10 +52,9 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .cb{position:absolute;right:2px;top:2px;bottom:2px;width:40px;border:0;background:none;color:var(--mute);font-size:15px;cursor:pointer;border-radius:8px}
 .cl{position:absolute;z-index:30;left:0;right:0;top:100%;margin-top:4px;max-height:220px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px #0005;padding:4px}
 .cl .o{display:block;padding:12px 10px;border-radius:8px;color:var(--ink);font-size:15px;cursor:pointer}.cl .o:active,.cl .o:hover{background:var(--inp)}
-.fg{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.fl{font-size:12px;color:var(--mute);min-width:64px}
-.chip{border:1px solid var(--line);background:var(--inp);color:var(--mute);padding:7px 13px;border-radius:99px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.chip.on{background:var(--win);border-color:var(--win);color:#fff}.fd{width:auto;padding:6px 8px}
-.fsum{margin:4px 0 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.fbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:10px}
+.btn.sm{padding:7px 12px;font-size:13px}
+.fsum{margin:2px 0 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .cnt{display:flex;gap:4px 14px;flex-wrap:wrap;margin-top:6px}.cnt div{font-size:12px;color:var(--mute)}.cnt b{display:block;font-size:20px;line-height:1.2}
 .hide{display:none}
 </style></head><body>
@@ -189,22 +188,17 @@ const F0=()=>({b:{res:"all",plat:"all",date:"all",from:"",to:""},d:{plat:"all",b
 const F=F0();
 const dAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 function inDate(x,f){const t=today();if(f.date==="today")return x===t;if(f.date==="7d")return x>=dAgo(6);if(f.date==="month")return x.slice(0,7)===t.slice(0,7);if(f.date==="custom")return(!f.from||x>=f.from)&&(!f.to||x<=f.to);return true}
-const chip=(g,k,v,l,on)=>`<button type="button" class="chip${on?" on":""}" data-g="${g}" data-k="${k}" data-v="${esc(v)}">${esc(l)}</button>`;
-const grp=(l,h)=>`<div class="fg"><span class="fl">${l}</span>${h}</div>`;
-const chips=(g,k,cur,items)=>chip(g,k,"all","All",cur==="all")+items.map(p=>chip(g,k,p,p,cur===p)).join("");
-function dateGrp(g,f){
- const o=[["all","All time"],["today","Today"],["7d","Last 7 days"],["month","This month"],["custom","Custom"]];
- return grp("Date",o.map(([v,l])=>chip(g,"date",v,l,f.date===v)).join("")+(f.date==="custom"?`<input type="date" class="fd" data-g="${g}" data-k="from" value="${f.from}"><span class="fl" style="min-width:0">to</span><input type="date" class="fd" data-g="${g}" data-k="to" value="${f.to}">`:""));
-}
-const fsum=(g,t,on)=>`<div class="sub fsum"><span>${t}</span>${on?`<button type="button" class="chip" data-g="${g}" data-k="clear">Clear filters</button>`:""}</div>`;
+const sel=(g,k,label,cur,opts)=>`<label>${label}<select data-g="${g}" data-k="${k}">${opts.map(([v,t])=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
+const dsel=(g,f)=>sel(g,"date","Date",f.date,[["all","All Time"],["today","Today"],["7d","Last 7 Days"],["month","This Month"],["custom","Custom Range"]])+(f.date==="custom"?`<label>From<input type="date" data-g="${g}" data-k="from" value="${f.from}"></label><label>To<input type="date" data-g="${g}" data-k="to" value="${f.to}"></label>`:"");
+const fsum=(g,t,on)=>`<div class="sub fsum"><span>${t}</span>${on?`<button type="button" class="btn g sm" data-clear="${g}">Clear Filters</button>`:""}</div>`;
 function filtB(){
  const f=F.b,B=bets(),pls=OPT.pl.filter(p=>B.some(b=>b.platform===p));
  if(f.plat!=="all"&&!pls.includes(f.plat))f.plat="all";
  const n=st=>B.filter(b=>b.status===st).length;
- const R=[["all","All",B.length],["won","Wins",n("won")],["lost","Losses",n("lost")],["cashout","Cash out",n("cashout")],["pending","Pending",n("pending")]];
+ const R=[["all","All Results",B.length],["won","Wins",n("won")],["lost","Losses",n("lost")],["cashout","Cash Out",n("cashout")],["pending","Pending",n("pending")]];
  const r=B.filter(b=>(f.res==="all"||b.status===f.res)&&(f.plat==="all"||b.platform===f.plat)&&inDate(b.betDate,f));
  const net=r.reduce((a,b)=>a+pl(b),0);
- $("#bfil").innerHTML=grp("Platform",chips("b","plat",f.plat,pls))+dateGrp("b",f)+grp("Result",R.map(([v,l,c])=>chip("b","res",v,`${l} (${c})`,f.res===v)).join(""))
+ $("#bfil").innerHTML=`<div class="fbar">`+sel("b","plat","Platform",f.plat,[["all","All Platforms"],...pls.map(p=>[p,p])])+dsel("b",f)+sel("b","res","Result",f.res,R.map(([v,l,c])=>[v,`${l} (${c})`]))+`</div>`
   +fsum("b",`Showing ${r.length} of ${B.length} bets · Wagered ${money(r.reduce((a,b)=>a+b.stake,0))} · Net ${sgn(net)}`,f.res!=="all"||f.plat!=="all"||f.date!=="all");
  return r;
 }
@@ -212,16 +206,12 @@ function filtD(){
  const f=F.d,A=deps(),pls=OPT.pl.filter(p=>A.some(d=>d.platform===p)),bks=OPT.bk.filter(p=>A.some(d=>d.bank===p));
  if(f.plat!=="all"&&!pls.includes(f.plat))f.plat="all";if(f.bank!=="all"&&!bks.includes(f.bank))f.bank="all";
  const r=A.filter(d=>(f.plat==="all"||d.platform===f.plat)&&(f.bank==="all"||d.bank===f.bank)&&inDate(d.date,f));
- $("#dfil").innerHTML=dateGrp("d",f)+grp("Bank",chips("d","bank",f.bank,bks))+grp("Platform",chips("d","plat",f.plat,pls))
+ $("#dfil").innerHTML=`<div class="fbar">`+dsel("d",f)+sel("d","bank","Bank",f.bank,[["all","All Banks"],...bks.map(p=>[p,p])])+sel("d","plat","Platform",f.plat,[["all","All Platforms"],...pls.map(p=>[p,p])])+`</div>`
   +fsum("d",`Showing ${r.length} of ${A.length} deposits · Total ${money(r.reduce((a,d)=>a+d.amount,0))}`,f.bank!=="all"||f.plat!=="all"||f.date!=="all");
  return r;
 }
-document.addEventListener("click",e=>{
- const c=e.target.closest(".chip");if(!c)return;const{g,k,v}=c.dataset;
- if(k==="clear")F[g]=F0()[g];else F[g][k]=v;
- renderBets();renderDeps();
-});
-document.addEventListener("change",e=>{const i=e.target;if(i.classList&&i.classList.contains("fd")){F[i.dataset.g][i.dataset.k]=i.value;renderBets();renderDeps()}});
+document.addEventListener("change",e=>{const t=e.target,g=t.dataset&&t.dataset.g;if(!g)return;F[g][t.dataset.k]=t.value;renderBets();renderDeps()});
+document.addEventListener("click",e=>{const c=e.target.closest("[data-clear]");if(!c)return;F[c.dataset.clear]=F0()[c.dataset.clear];renderBets();renderDeps()});
 function renderBets(){
  const r=filtB().sort((a,b)=>b.betDate.localeCompare(a.betDate));
  $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td><button class="ic" data-e="${b.id}">Edit</button><button class="ic" data-x="${b.id}">Delete</button></td></tr>`}).join(""):`<tr><td colspan="10" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
