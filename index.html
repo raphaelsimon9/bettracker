@@ -47,6 +47,10 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .ic:hover{color:var(--ink)}
 .empty{color:var(--mute);text-align:center;padding:28px 0}
 .auth:not(.hide){display:grid;min-height:100dvh;place-items:center;padding:20px}.auth .card{width:100%;max-width:380px}.auth form{grid-template-columns:1fr;margin:14px 0 0}.auth h1{font-size:26px}#amsg{font-size:13px;color:var(--loss);min-height:18px}
+.combo{position:relative;display:block}.combo input{padding-right:42px}
+.cb{position:absolute;right:2px;top:2px;bottom:2px;width:40px;border:0;background:none;color:var(--mute);font-size:15px;cursor:pointer;border-radius:8px}
+.cl{position:absolute;z-index:30;left:0;right:0;top:100%;margin-top:4px;max-height:220px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px #0005;padding:4px}
+.cl .o{display:block;padding:12px 10px;border-radius:8px;color:var(--ink);font-size:15px;cursor:pointer}.cl .o:active,.cl .o:hover{background:var(--inp)}
 .hide{display:none}
 </style></head><body>
 <div id="auth" class="auth hide"><div class="card"><h1>Bet <span>Ledger</span></h1><div class="sub">Sign in to see your data on any device.</div>
@@ -72,7 +76,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 <section id="bets" class="hide">
  <div class="card">
   <form id="bf">
-   <label>Platform<input name="platform" list="pl" required placeholder="e.g. Sportybet"></label>
+   <label>Platform<span class="combo"><input name="platform" data-list="pl" autocomplete="off" required placeholder="e.g. Sportybet"><button type="button" class="cb" tabindex="-1" aria-label="Show options">▾</button><span class="cl hide"></span></span></label>
    <label>Amount wagered<input name="stake" type="number" step="0.01" min="0" required></label>
    <label>Total odds<input name="odds" type="number" step="0.01" min="1" required></label>
    <label>Date of bet<input name="betDate" type="date" required></label>
@@ -90,14 +94,13 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   <form id="df">
    <label>Amount<input name="amount" type="number" step="0.01" min="0" required></label>
    <label>Date deposited<input name="date" type="date" required></label>
-   <label>Platform deposited to<input name="platform" list="pl" required></label>
-   <label>Bank deposited from<input name="bank" list="bk" required></label>
+   <label>Platform deposited to<span class="combo"><input name="platform" data-list="pl" autocomplete="off" required><button type="button" class="cb" tabindex="-1" aria-label="Show options">▾</button><span class="cl hide"></span></span></label>
+   <label>Bank deposited from<span class="combo"><input name="bank" data-list="bk" autocomplete="off" required><button type="button" class="cb" tabindex="-1" aria-label="Show options">▾</button><span class="cl hide"></span></span></label>
    <div style="display:flex;gap:8px"><button class="btn" id="dsave">Add deposit</button><button type="button" class="btn g hide" id="dcancel">Cancel</button></div>
   </form>
   <div class="tw"><table><thead><tr><th>Date</th><th>Amount</th><th>Platform</th><th>Bank</th><th></th></tr></thead><tbody id="dtb"></tbody></table></div>
  </div>
 </section>
-<datalist id="pl"></datalist><datalist id="bk"></datalist>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -110,7 +113,7 @@ const sgn=n=>(n>0?"+":"")+money(n);
 const today=()=>new Date().toISOString().slice(0,10);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-let D=[],charts=[],editB=null,editD=null;
+let OPT={pl:[],bk:[]},D=[],charts=[],editB=null,editD=null;
 
 /* ---------- storage: Supabase (Postgres + auth + row-level security) ---------- */
 const SB=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);
@@ -162,9 +165,8 @@ const sd=b=>b.settledDate||b.betDate;
 function render(){renderReport();renderBets();renderDeps();lists()}
 function lists(){
  const P=[...new Set(["Sportybet","Bet9ja","Football.com","Stake","1xBet",...D.map(x=>x.platform)])];
- const B=[...new Set(["Stanbic IBTC","UBA","First Bank","Opay","GTBank","Access Bank","Zenith Bank","Kuda","Moniepoint",...deps().map(x=>x.bank)])];
- $("#pl").innerHTML=P.map(p=>`<option value="${esc(p)}">`).join("");
- $("#bk").innerHTML=B.map(p=>`<option value="${esc(p)}">`).join("");
+ const B=[...new Set(["GTBank","Access Bank","Zenith Bank","UBA","First Bank","Kuda","Opay","Moniepoint","Stanbic IBTC",...deps().map(x=>x.bank)])];
+ OPT.pl=P;OPT.bk=B;
 }
 function renderBets(){
  const r=bets().sort((a,b)=>b.betDate.localeCompare(a.betDate));
@@ -229,5 +231,18 @@ document.addEventListener("click",e=>{
 $("#nav").onclick=e=>{const t=e.target.dataset.t;if(!t)return;
  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b===e.target));
  ["report","bets","deps"].forEach(s=>$("#"+s).classList.toggle("hide",s!==t));if(t==="report")renderReport()};
+function openList(c,q,toggle){
+ const l=c.querySelector(".cl");
+ if(toggle&&!l.classList.contains("hide")){l.classList.add("hide");return}
+ const items=OPT[c.querySelector("input").dataset.list].filter(x=>x.toLowerCase().includes(q.toLowerCase()));
+ l.innerHTML=items.map(x=>`<span class="o">${esc(x)}</span>`).join("");l.classList.toggle("hide",!items.length);
+}
+document.addEventListener("click",e=>{
+ document.querySelectorAll(".cl").forEach(l=>{if(!l.parentNode.contains(e.target))l.classList.add("hide")});
+ const o=e.target.closest(".cl .o"),b=e.target.closest(".cb");
+ if(o){const c=o.closest(".combo");c.querySelector("input").value=o.textContent;c.querySelector(".cl").classList.add("hide")}
+ else if(b)openList(b.closest(".combo"),"",true);
+});
+document.addEventListener("input",e=>{const i=e.target;if(i.dataset&&i.dataset.list)openList(i.closest(".combo"),i.value)});
 resetB();resetD();init();
 </script></body></html>
