@@ -11,7 +11,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .wrap{max-width:1080px;margin:0 auto;padding:18px 16px 60px}
-header{margin-bottom:16px}.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);padding:8px 0}.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px}.balbox{text-align:right}.bl{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.bv{font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.15}.bs{color:var(--mute);font-size:10px}
+header{margin-bottom:16px}.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);padding:8px 0}.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px}.balbox{text-align:right}.bl{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.bv{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.15}.bs{color:var(--mute);font-size:10px}
 h1{font-size:22px;margin:0;letter-spacing:-.02em}
 h1 span{color:var(--win)}
 .sub{color:var(--mute);font-size:12px}
@@ -42,6 +42,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .pill{padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
 .pill.won{background:color-mix(in srgb,var(--win) 18%,transparent);color:var(--win)}
 .pill.lost{background:color-mix(in srgb,var(--loss) 18%,transparent);color:var(--loss)}
+.pill.cashout{background:color-mix(in srgb,var(--blue) 20%,transparent);color:var(--blue)}
 .pill.pending{background:color-mix(in srgb,var(--pend) 20%,transparent);color:var(--pend)}
 .ic{background:none;border:0;color:var(--mute);cursor:pointer;font:inherit;padding:2px 6px}
 .ic:hover{color:var(--ink)}
@@ -58,7 +59,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 <div class="wrap hide" id="app">
 <header>
  <div class="top"><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
- <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">Deposits + P/L − Pending</div></div></div>
+ <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">deposits + P/L − pending</div></div></div>
  <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button></nav>
  <button class="btn g" id="out">Sign out</button></div>
 </header>
@@ -83,7 +84,8 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
    <label>Total odds<input name="odds" type="number" step="0.01" min="1" required></label>
    <label>Bonus (₦, paid if won)<input name="bonus" type="number" step="0.01" min="0" placeholder="0"></label>
    <label>Date of bet<input name="betDate" type="date" required></label>
-   <label>Result<select name="status"><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option></select></label>
+   <label>Result<select name="status"><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="cashout">Cashed out</option></select></label>
+   <label id="colab" class="hide">Cash-out amount (₦)<input name="cashout" type="number" step="0.01" min="0"></label>
    <label>Date won/lost<input name="settledDate" type="date"></label>
    <div class="prev" id="bprev"></div>
    <div style="display:flex;gap:8px"><button class="btn" id="bsave">Add bet</button><button type="button" class="btn g hide" id="bcancel">Cancel</button></div>
@@ -120,20 +122,20 @@ let OPT={pl:[],bk:[]},D=[],charts=[],editB=null,editD=null;
 
 /* ---------- storage: Supabase (Postgres + auth + row-level security) ---------- */
 const SB=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);
-const toBet=r=>({id:r.id,kind:"bet",platform:r.platform,stake:+r.stake,odds:+r.odds,bonus:+r.bonus||0,betDate:r.bet_date,status:r.status,settledDate:r.settled_date||""});
+const toBet=r=>({id:r.id,kind:"bet",platform:r.platform,stake:+r.stake,odds:+r.odds,bonus:+r.bonus||0,cashout:r.cashout==null?null:+r.cashout,betDate:r.bet_date,status:r.status,settledDate:r.settled_date||""});
 const toDep=r=>({id:r.id,kind:"dep",amount:+r.amount,date:r.deposit_date,platform:r.platform,bank:r.bank});
 async function pull(){
  $("#sync").textContent="Syncing…";
  const [b,d]=await Promise.all([SB.from("bets").select("*"),SB.from("deposits").select("*")]);
  if(b.error||d.error){$("#sync").textContent="Couldn’t load — check your connection";return}
- D=[...b.data.map(toBet),...d.data.map(toDep)];$("#sync").textContent="Synced";render();
+ D=[...b.data.map(toBet),...d.data.map(toDep)];$("#sync").textContent="Synced · v5";render();
 }
 const fail=r=>{alert("Couldn’t save: "+r.error.message);pull()};
 const store={
  async put(o){
   const i=D.findIndex(x=>x.id===o.id);i<0?D.push(o):D[i]=o;render();
   const r=o.kind==="bet"
-   ?await SB.from("bets").upsert({id:o.id,platform:o.platform,stake:o.stake,odds:o.odds,bonus:o.bonus||0,bet_date:o.betDate,status:o.status,settled_date:o.settledDate||null})
+   ?await SB.from("bets").upsert({id:o.id,platform:o.platform,stake:o.stake,odds:o.odds,bonus:o.bonus||0,cashout:o.cashout??null,bet_date:o.betDate,status:o.status,settled_date:o.settledDate||null})
    :await SB.from("deposits").upsert({id:o.id,amount:o.amount,deposit_date:o.date,platform:o.platform,bank:o.bank});
   if(r.error)fail(r);
  },
@@ -161,7 +163,7 @@ if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWor
 const bets=()=>D.filter(x=>x.kind==="bet");
 const deps=()=>D.filter(x=>x.kind==="dep");
 const winAmt=b=>b.stake*b.odds+(b.bonus||0);
-const pl=b=>b.status==="won"?winAmt(b)-b.stake:b.status==="lost"?-b.stake:0;
+const pl=b=>b.status==="won"?winAmt(b)-b.stake:b.status==="lost"?-b.stake:b.status==="cashout"?(b.cashout||0)-b.stake:0;
 const sd=b=>b.settledDate||b.betDate;
 
 /* ---------- render ---------- */
@@ -173,20 +175,20 @@ function lists(){
 }
 function renderBets(){
  const r=bets().sort((a,b)=>b.betDate.localeCompare(a.betDate));
- $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${b.status[0].toUpperCase()+b.status.slice(1)}</span></td><td>${b.status==="won"?money(winAmt(b)):"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td><button class="ic" data-e="${b.id}">Edit</button><button class="ic" data-x="${b.id}">Delete</button></td></tr>`}).join(""):`<tr><td colspan="10" class="empty">No bets yet. Add your first one above.</td></tr>`;
+ $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td><button class="ic" data-e="${b.id}">Edit</button><button class="ic" data-x="${b.id}">Delete</button></td></tr>`}).join(""):`<tr><td colspan="10" class="empty">No bets yet. Add your first one above.</td></tr>`;
 }
 function renderDeps(){
  const r=deps().sort((a,b)=>b.date.localeCompare(a.date));
  $("#dtb").innerHTML=r.length?r.map(d=>`<tr><td>${d.date}</td><td>${money(d.amount)}</td><td>${esc(d.platform)}</td><td>${esc(d.bank)}</td><td><button class="ic" data-e="${d.id}">Edit</button><button class="ic" data-x="${d.id}">Delete</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">No deposits yet.</td></tr>`;
 }
 function renderReport(){
- const B=bets(),S=B.filter(b=>b.status!=="pending"),W=S.filter(b=>b.status==="won"),L=S.filter(b=>b.status==="lost"),Pn=B.filter(b=>b.status==="pending");
+ const B=bets(),S=B.filter(b=>b.status!=="pending"),W=S.filter(b=>b.status==="won"),L=S.filter(b=>b.status==="lost"),C=S.filter(b=>b.status==="cashout"),Pn=B.filter(b=>b.status==="pending");
  const net=S.reduce((a,b)=>a+pl(b),0),staked=S.reduce((a,b)=>a+b.stake,0),dep=deps().reduce((a,d)=>a+d.amount,0);
- const wr=S.length?W.length/S.length*100:0,roi=staked?net/staked*100:0;
+ const wr=S.length?(W.length+C.filter(b=>pl(b)>0).length)/S.length*100:0,roi=staked?net/staked*100:0;
  const k=(l,v,s,c="")=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
  const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),bal=dep+net-pendAmt;
  const hb=$("#hbal");hb.textContent=money(bal);hb.className="bv "+(bal>0?"pos":bal<0?"neg":"");
- $("#kpis").innerHTML=k("Net profit / loss",sgn(net),`${S.length} settled bets`,net>0?"pos":net<0?"neg":"")+k("Total deposited",money(dep),`${deps().length} deposits`)+k("Total wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} bets`)+k("Win rate",wr.toFixed(1)+"%",`${W.length} won · ${L.length} lost`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","profit ÷ settled stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"added to winnings")+k("Pending",String(Pn.length),money(pendAmt)+" at stake");
+ $("#kpis").innerHTML=k("Net profit / loss",sgn(net),`${S.length} settled bets`,net>0?"pos":net<0?"neg":"")+k("Total deposited",money(dep),`${deps().length} deposits`)+k("Total wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} bets`)+k("Win rate",wr.toFixed(1)+"%",`${W.length} won · ${L.length} lost · ${C.length} cashed out`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","profit ÷ settled stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"added to winnings")+k("Pending",String(Pn.length),money(pendAmt)+" at stake");
  const pb={};const row=p=>pb[p]=pb[p]||{d:0,n:0,s:0};
  deps().forEach(d=>row(d.platform).d+=d.amount);B.forEach(b=>{const r=row(b.platform);b.status==="pending"?r.s+=b.stake:r.n+=pl(b)});
  const pk2=Object.keys(pb).sort((a,b)=>(pb[b].d+pb[b].n-pb[b].s)-(pb[a].d+pb[a].n-pb[a].s));
@@ -202,7 +204,7 @@ function renderReport(){
  mk("#c1",{type:"line",data:{labels:sorted.map(sd),datasets:[{data:cum,borderColor:run>=0?win:loss,borderWidth:2.5,tension:.3,pointRadius:sorted.length>40?0:3,fill:{target:"origin",above:win+"22",below:loss+"22"}}]},options:base});
  const m={};S.forEach(b=>{const k=sd(b).slice(0,7);m[k]=(m[k]||0)+pl(b)});const mk_=Object.keys(m).sort();
  mk("#c2",{type:"bar",data:{labels:mk_,datasets:[{data:mk_.map(k=>m[k]),backgroundColor:mk_.map(k=>m[k]>=0?win:loss),borderRadius:6}]},options:base});
- mk("#c3",{type:"doughnut",data:{labels:["Won","Lost","Pending"],datasets:[{data:[W.length,L.length,Pn.length],backgroundColor:[win,loss,pend],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"68%",plugins:{legend:{position:"bottom"}}}});
+ mk("#c3",{type:"doughnut",data:{labels:["Won","Lost","Cashed out","Pending"],datasets:[{data:[W.length,L.length,C.length,Pn.length],backgroundColor:[win,loss,blue,pend],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"68%",plugins:{legend:{position:"bottom"}}}});
  const pp={};S.forEach(b=>pp[b.platform]=(pp[b.platform]||0)+pl(b));const pk=Object.keys(pp);
  mk("#c4",{type:"bar",data:{labels:pk,datasets:[{data:pk.map(k=>pp[k]),backgroundColor:pk.map(k=>pp[k]>=0?win:loss),borderRadius:6}]},options:{...base,indexAxis:"y",scales:{y:{grid:{display:false}},x:{ticks:{callback:v=>CUR+Number(v).toLocaleString()}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+money(c.parsed.x)}}}}});
  const dp={};deps().forEach(d=>dp[d.platform]=(dp[d.platform]||0)+d.amount);const dk=Object.keys(dp);
@@ -216,15 +218,16 @@ const bf=$("#bf"),df=$("#df");
 function resetB(){editB=null;bf.reset();bf.betDate.value=today();$("#bsave").textContent="Add bet";$("#bcancel").classList.add("hide");prev()}
 function resetD(){editD=null;df.reset();df.date.value=today();$("#dsave").textContent="Add deposit";$("#dcancel").classList.add("hide")}
 function prev(){
- const s=+bf.stake.value,o=+bf.odds.value,x=+bf.bonus.value||0;
- $("#bprev").innerHTML=s&&o?`Win amount: <b>${money(s*o+x)}</b>${x?` (incl. ${money(x)} bonus)`:""} · profit if it wins: <b class="pos">${sgn(s*o+x-s)}</b>`:"Win amount is calculated automatically from wager × odds.";
+ const s=+bf.stake.value,o=+bf.odds.value,x=+bf.bonus.value||0,co=bf.status.value==="cashout";
+ $("#colab").classList.toggle("hide",!co);bf.cashout.required=co;
+ $("#bprev").innerHTML=co&&s&&bf.cashout.value!==""?`Cash-out: <b>${money(+bf.cashout.value)}</b> · profit/loss: <b class="${+bf.cashout.value>=s?"pos":"neg"}">${sgn(+bf.cashout.value-s)}</b>`:s&&o?`Win amount: <b>${money(s*o+x)}</b>${x?` (incl. ${money(x)} bonus)`:""} · profit if it wins: <b class="pos">${sgn(s*o+x-s)}</b>`:"Win amount is calculated automatically from wager × odds.";
  bf.settledDate.disabled=bf.status.value==="pending";
  if(bf.status.value!=="pending"&&!bf.settledDate.value)bf.settledDate.value=today();
  if(bf.status.value==="pending")bf.settledDate.value="";
 }
 bf.addEventListener("input",prev);
 bf.addEventListener("submit",e=>{e.preventDefault();const v=fd(bf);
- store.put({id:editB||uid(),kind:"bet",platform:v.platform.trim(),stake:+v.stake,odds:+v.odds,bonus:+v.bonus||0,betDate:v.betDate,status:v.status,settledDate:v.status==="pending"?"":v.settledDate||v.betDate});
+ store.put({id:editB||uid(),kind:"bet",platform:v.platform.trim(),stake:+v.stake,odds:+v.odds,bonus:+v.bonus||0,cashout:v.status==="cashout"?+v.cashout:null,betDate:v.betDate,status:v.status,settledDate:v.status==="pending"?"":v.settledDate||v.betDate});
  resetB()});
 df.addEventListener("submit",e=>{e.preventDefault();const v=fd(df);
  store.put({id:editD||uid(),kind:"dep",amount:+v.amount,date:v.date,platform:v.platform.trim(),bank:v.bank.trim()});resetD()});
@@ -234,7 +237,7 @@ document.addEventListener("click",e=>{
  const x=e.target.closest("[data-x]"),ed=e.target.closest("[data-e]");
  if(x&&confirm("Delete this entry?"))store.del(x.dataset.x);
  if(ed){const o=D.find(i=>i.id===ed.dataset.e);if(!o)return;
-  if(o.kind==="bet"){editB=o.id;for(const k of["platform","stake","odds","bonus","betDate","status","settledDate"])bf[k].value=o[k]??"";prev();bf.settledDate.value=o.settledDate||bf.settledDate.value;$("#bsave").textContent="Save changes";$("#bcancel").classList.remove("hide");bf.scrollIntoView({behavior:"smooth",block:"center"})}
+  if(o.kind==="bet"){editB=o.id;for(const k of["platform","stake","odds","bonus","cashout","betDate","status","settledDate"])bf[k].value=o[k]??"";prev();bf.settledDate.value=o.settledDate||bf.settledDate.value;$("#bsave").textContent="Save changes";$("#bcancel").classList.remove("hide");bf.scrollIntoView({behavior:"smooth",block:"center"})}
   else{editD=o.id;for(const k of["amount","date","platform","bank"])df[k].value=o[k];$("#dsave").textContent="Save changes";$("#dcancel").classList.remove("hide");df.scrollIntoView({behavior:"smooth",block:"center"})}}
 });
 $("#nav").onclick=e=>{const t=e.target.dataset.t;if(!t)return;
