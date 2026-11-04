@@ -11,7 +11,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .wrap{max-width:1080px;margin:0 auto;padding:18px 16px 60px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+header{margin-bottom:16px}.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);padding:8px 0}.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px}.balbox{text-align:right}.bl{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.bv{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.15}.bs{color:var(--mute);font-size:10px}
 h1{font-size:22px;margin:0;letter-spacing:-.02em}
 h1 span{color:var(--win)}
 .sub{color:var(--mute);font-size:12px}
@@ -57,9 +57,10 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 <form id="af"><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="current-password" required></label><div id="amsg"></div><button class="btn" id="ain">Sign in</button><button type="button" class="btn g" id="aup">Create account</button></form></div></div>
 <div class="wrap hide" id="app">
 <header>
- <div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
- <nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button></nav>
- <button class="btn g" id="out">Sign out</button>
+ <div class="top"><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
+ <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">deposits + P/L − pending</div></div></div>
+ <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button></nav>
+ <button class="btn g" id="out">Sign out</button></div>
 </header>
 
 <section id="report">
@@ -70,6 +71,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   <div class="card"><h3>Results</h3><div class="ch"><canvas id="c3"></canvas></div></div>
   <div class="card"><h3>Profit / loss by platform</h3><div class="ch"><canvas id="c4"></canvas></div></div>
   <div class="card"><h3>Deposits by platform</h3><div class="ch"><canvas id="c5"></canvas></div></div>
+  <div class="card"><h3>Balance by platform</h3><div class="tw"><table id="pbal" style="min-width:0"></table></div></div>
  </div>
 </section>
 
@@ -164,8 +166,8 @@ const sd=b=>b.settledDate||b.betDate;
 /* ---------- render ---------- */
 function render(){renderReport();renderBets();renderDeps();lists()}
 function lists(){
- const P=[...new Set(["Football.com","Sportybet","Bet9ja","Stake","1xBet",...D.map(x=>x.platform)])];
- const B=[...new Set(["Stanbic IBTC","UBA","First Bank","Opay","GTBank","Access Bank","Zenith Bank","Kuda","Moniepoint",...deps().map(x=>x.bank)])];
+ const P=[...new Set(["Sportybet","Bet9ja","Football.com","Stake","1xBet",...D.map(x=>x.platform)])];
+ const B=[...new Set(["GTBank","Access Bank","Zenith Bank","UBA","First Bank","Kuda","Opay","Moniepoint","Stanbic IBTC",...deps().map(x=>x.bank)])];
  OPT.pl=P;OPT.bk=B;
 }
 function renderBets(){
@@ -181,7 +183,13 @@ function renderReport(){
  const net=S.reduce((a,b)=>a+pl(b),0),staked=S.reduce((a,b)=>a+b.stake,0),dep=deps().reduce((a,d)=>a+d.amount,0);
  const wr=S.length?W.length/S.length*100:0,roi=staked?net/staked*100:0;
  const k=(l,v,s,c="")=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
- $("#kpis").innerHTML=k("Net profit / loss",sgn(net),`${S.length} settled bets`,net>0?"pos":net<0?"neg":"")+k("Total deposited",money(dep),`${deps().length} deposits`)+k("Total wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} bets`)+k("Win rate",wr.toFixed(1)+"%",`${W.length} won · ${L.length} lost`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","profit ÷ settled stakes",roi>0?"pos":roi<0?"neg":"")+k("Pending",String(Pn.length),money(Pn.reduce((a,b)=>a+b.stake,0))+" at stake");
+ const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),bal=dep+net-pendAmt;
+ const hb=$("#hbal");hb.textContent=money(bal);hb.className="bv "+(bal>0?"pos":bal<0?"neg":"");
+ $("#kpis").innerHTML=k("Net profit / loss",sgn(net),`${S.length} settled bets`,net>0?"pos":net<0?"neg":"")+k("Total deposited",money(dep),`${deps().length} deposits`)+k("Total wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} bets`)+k("Win rate",wr.toFixed(1)+"%",`${W.length} won · ${L.length} lost`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","profit ÷ settled stakes",roi>0?"pos":roi<0?"neg":"")+k("Pending",String(Pn.length),money(pendAmt)+" at stake");
+ const pb={};const row=p=>pb[p]=pb[p]||{d:0,n:0,s:0};
+ deps().forEach(d=>row(d.platform).d+=d.amount);B.forEach(b=>{const r=row(b.platform);b.status==="pending"?r.s+=b.stake:r.n+=pl(b)});
+ const pk2=Object.keys(pb).sort((a,b)=>(pb[b].d+pb[b].n-pb[b].s)-(pb[a].d+pb[a].n-pb[a].s));
+ $("#pbal").innerHTML=pk2.length?`<thead><tr><th>Platform</th><th>Deposited</th><th>Net P/L</th><th>Balance</th></tr></thead><tbody>`+pk2.map(p=>{const r=pb[p],v=r.d+r.n-r.s;return`<tr><td>${esc(p)}</td><td>${money(r.d)}</td><td class="${r.n>0?"pos":r.n<0?"neg":""}">${sgn(r.n)}</td><td class="${v>0?"pos":v<0?"neg":""}"><b>${money(v)}</b></td></tr>`}).join("")+"</tbody>":`<tbody><tr><td class="empty">Add a deposit to see balances.</td></tr></tbody>`;
  if(typeof Chart==="undefined")return;
  charts.forEach(c=>c.destroy());charts=[];
  const ink=css("--mute"),line=css("--line"),win=css("--win"),loss=css("--loss"),pend=css("--pend"),blue=css("--blue");
