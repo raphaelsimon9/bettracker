@@ -76,6 +76,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   <div class="card"><h3>Monthly Profit / Loss</h3><div class="ch"><canvas id="c2"></canvas></div></div>
   <div class="card"><h3>Profit / Loss by platform</h3><div class="ch"><canvas id="c4"></canvas></div></div>
   <div class="card"><h3>Deposits by Platform</h3><div class="ch"><canvas id="c5"></canvas></div></div>
+  <div class="card"><h3>Platform Bonus Wagered by Platform</h3><div class="ch"><canvas id="c6"></canvas></div></div>
   <div class="card"><h3>Balance by Platform</h3><div class="tw"><table id="pbal" style="min-width:0"></table></div></div>
  </div>
 </section>
@@ -84,6 +85,8 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
  <div class="card">
   <form id="bf">
    <label>Platform<span class="combo"><input name="platform" data-list="pl" autocomplete="off" required placeholder="e.g. Sportybet"><button type="button" class="cb" tabindex="-1" aria-label="Show options">▾</button><span class="cl hide"></span></span></label>
+   <label>Funded From<select name="source"><option value="balance">Main Balance</option><option value="bonus">Platform Bonus</option><option value="mixed">Balance + Bonus</option></select></label>
+   <label id="bslab" class="hide">Stake From Bonus (₦)<input name="bonusStake" type="number" step="0.01" min="0"></label>
    <label>Amount Wagered<input name="stake" type="number" step="0.01" min="0" required></label>
    <label>Total Odds<input name="odds" type="number" step="0.01" min="1" required></label>
    <label>Bonus (₦, paid if won)<input name="bonus" type="number" step="0.01" min="0" placeholder="0"></label>
@@ -97,7 +100,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
  </div>
  <div class="card" style="margin-top:12px">
   <div id="bfil"></div>
-  <div class="tw"><table><thead><tr><th>Bet Date</th><th>Platform</th><th>Wagered</th><th>Odds</th><th>Bonus</th><th>Result</th><th>Win Amount</th><th>Profit/Loss</th><th>Settled</th><th></th></tr></thead><tbody id="btb"></tbody></table></div>
+  <div class="tw"><table><thead><tr><th>Bet Date</th><th>Platform</th><th>Wagered</th><th>Funded From</th><th>Odds</th><th>Bonus</th><th>Result</th><th>Win Amount</th><th>Profit/Loss</th><th>Settled</th><th></th></tr></thead><tbody id="btb"></tbody></table></div>
  </div>
 </section>
 
@@ -132,7 +135,7 @@ let OPT={pl:[],bk:[]},D=[],charts=[],editB=null,editD=null;
 
 /* ---------- storage: Supabase (Postgres + auth + row-level security) ---------- */
 const SB=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);
-const toBet=r=>({id:r.id,kind:"bet",platform:r.platform,stake:+r.stake,odds:+r.odds,bonus:+r.bonus||0,cashout:r.cashout==null?null:+r.cashout,betDate:r.bet_date,status:r.status,settledDate:r.settled_date||""});
+const toBet=r=>({id:r.id,kind:"bet",platform:r.platform,stake:+r.stake,odds:+r.odds,bonus:+r.bonus||0,cashout:r.cashout==null?null:+r.cashout,betDate:r.bet_date,bonusStake:+r.bonus_stake||0,status:r.status,settledDate:r.settled_date||""});
 const toDep=r=>({id:r.id,kind:"dep",amount:+r.amount,date:r.deposit_date,platform:r.platform,bank:r.bank});
 async function pull(){
  $("#sync").textContent="Syncing…";
@@ -145,7 +148,7 @@ const store={
  async put(o){
   const i=D.findIndex(x=>x.id===o.id);i<0?D.push(o):D[i]=o;render();
   const r=o.kind==="bet"
-   ?await SB.from("bets").upsert({id:o.id,platform:o.platform,stake:o.stake,odds:o.odds,bonus:o.bonus||0,cashout:o.cashout??null,bet_date:o.betDate,status:o.status,settled_date:o.settledDate||null})
+   ?await SB.from("bets").upsert({id:o.id,platform:o.platform,stake:o.stake,odds:o.odds,bonus:o.bonus||0,cashout:o.cashout??null,bet_date:o.betDate,bonus_stake:o.bonusStake||0,status:o.status,settled_date:o.settledDate||null})
    :await SB.from("deposits").upsert({id:o.id,amount:o.amount,deposit_date:o.date,platform:o.platform,bank:o.bank});
   if(r.error)fail(r);
  },
@@ -173,7 +176,8 @@ if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWor
 const bets=()=>D.filter(x=>x.kind==="bet");
 const deps=()=>D.filter(x=>x.kind==="dep");
 const winAmt=b=>b.stake*b.odds+(b.bonus||0);
-const pl=b=>b.status==="won"?winAmt(b)-b.stake:b.status==="lost"?-b.stake:b.status==="cashout"?(b.cashout||0)-b.stake:0;
+const bs=b=>Math.min(+b.bonusStake||0,b.stake),balS=b=>b.stake-bs(b);
+const pl=b=>b.status==="won"?winAmt(b)-b.stake:b.status==="lost"?-balS(b):b.status==="cashout"?Math.max((b.cashout||0)-b.stake,-balS(b)):0;
 const sd=b=>b.settledDate||b.betDate;
 
 /* ---------- render ---------- */
@@ -214,7 +218,7 @@ document.addEventListener("change",e=>{const t=e.target,g=t.dataset&&t.dataset.g
 document.addEventListener("click",e=>{const c=e.target.closest("[data-clear]");if(!c)return;F[c.dataset.clear]=F0()[c.dataset.clear];renderBets();renderDeps()});
 function renderBets(){
  const r=filtB().sort((a,b)=>b.betDate.localeCompare(a.betDate));
- $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":b.status==="pending"?`<span style="color:var(--pend)">${money(winAmt(b))}</span> (Potential)`:"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td>${b.status==="pending"?`<button class="ic" data-e="${b.id}">Edit</button>`:`<button class="ic" disabled style="opacity:.4">Settled</button>`}${b.status==="pending"?`<button class="ic" data-x="${b.id}">Delete</button>`:""}</td></tr>`}).join(""):`<tr><td colspan="10" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
+ $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${bs(b)<=0?"Main Balance":balS(b)<=0?"Platform Bonus":money(balS(b))+" Balance + "+money(bs(b))+" Bonus"}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":b.status==="pending"?`<span style="color:var(--pend)">${money(winAmt(b))}</span> (Potential)`:"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td>${b.status==="pending"?`<button class="ic" data-e="${b.id}">Edit</button>`:`<button class="ic" disabled style="opacity:.4">Settled</button>`}${b.status==="pending"?`<button class="ic" data-x="${b.id}">Delete</button>`:""}</td></tr>`}).join(""):`<tr><td colspan="11" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
 }
 function renderDeps(){
  const r=filtD().sort((a,b)=>b.date.localeCompare(a.date));
@@ -222,13 +226,14 @@ function renderDeps(){
 }
 function renderReport(){
  const B=bets(),S=B.filter(b=>b.status!=="pending"),W=S.filter(b=>b.status==="won"),L=S.filter(b=>b.status==="lost"),C=S.filter(b=>b.status==="cashout"),Pn=B.filter(b=>b.status==="pending");
- const net=S.reduce((a,b)=>a+pl(b),0),staked=S.reduce((a,b)=>a+b.stake,0),dep=deps().reduce((a,d)=>a+d.amount,0);
+ const net=S.reduce((a,b)=>a+pl(b),0),staked=S.reduce((a,b)=>a+balS(b),0),dep=deps().reduce((a,d)=>a+d.amount,0);
  const wr=S.length?(W.length+C.filter(b=>pl(b)>0).length)/S.length*100:0,roi=staked?net/staked*100:0;
  const k=(l,v,s,c="")=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
- const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),bal=dep+net-pendAmt;
+ const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),pendBal=Pn.reduce((a,b)=>a+balS(b),0),bal=dep+net-pendBal;
+ const wBal=B.reduce((a,b)=>a+balS(b),0),wBon=B.reduce((a,b)=>a+bs(b),0);
  const pot=Pn.reduce((a,b)=>a+winAmt(b),0);
  const hb=$("#hbal");hb.textContent=money(bal);hb.className="bv "+(bal>0?"pos":bal<0?"neg":"");
- $("#kpis").innerHTML=k("Net Profit / Loss",sgn(net),`<div class="cnt"><div><b>${B.length}</b>Total Bets</div><div><b style="color:var(--pend)">${Pn.length}</b>Pending</div><div><b class="pos">${W.length}</b>Won</div><div><b class="neg">${L.length}</b>Lost</div><div><b style="color:var(--blue)">${C.length}</b>Cashed Out</div></div>`,net>0?"pos":net<0?"neg":"")+k("Total Deposited",money(dep),`${deps().length} Deposits`)+k("Total Wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} Bets`)+k("Win Rate",wr.toFixed(1)+"%",`of ${S.length} Settled Bets`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","Profit ÷ Settled Stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses Won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"Added to Winnings")+k("Pending",String(Pn.length),money(pendAmt)+" At Stake")+k("Potential Winnings",money(pot),`${sgn(pot-pendAmt)} Profit If All Win`);
+ $("#kpis").innerHTML=k("Net Profit / Loss",sgn(net),`<div class="cnt"><div><b>${B.length}</b>Total Bets</div><div><b style="color:var(--pend)">${Pn.length}</b>Pending</div><div><b class="pos">${W.length}</b>Won</div><div><b class="neg">${L.length}</b>Lost</div><div><b style="color:var(--blue)">${C.length}</b>Cashed Out</div></div>`,net>0?"pos":net<0?"neg":"")+k("Total Deposited",money(dep),`${deps().length} Deposits`)+k("Total Wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} Bets`)+k("Total Bet Amount",money(wBal+wBon),`<div class="cnt"><div><b>${money(wBal)}</b>From Main Balance</div><div><b style="color:var(--pend)">${money(wBon)}</b>From Platform Bonus</div></div>`)+k("Win Rate",wr.toFixed(1)+"%",`of ${S.length} Settled Bets`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","Profit ÷ Settled Stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses Won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"Added to Winnings")+k("Pending",String(Pn.length),money(pendAmt)+" At Stake")+k("Potential Winnings",money(pot),`${sgn(pot-pendAmt)} Profit If All Win`);
  $("#kpis").firstElementChild.style.gridColumn="span 2";
  const pb={};const row=p=>pb[p]=pb[p]||{d:0,n:0,s:0};
  deps().forEach(d=>row(d.platform).d+=d.amount);B.forEach(b=>{const r=row(b.platform);b.status==="pending"?r.s+=b.stake:r.n+=pl(b)});
@@ -251,17 +256,19 @@ function renderReport(){
  mk("#c4",{type:"bar",data:{labels:pk,datasets:[{data:pk.map(k=>pp[k]),backgroundColor:pk.map(k=>pp[k]>=0?win:loss),borderRadius:6}]},options:{...base,indexAxis:"y",scales:{y:{grid:{display:false}},x:{ticks:{callback:v=>CUR+Number(v).toLocaleString()}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+money(c.parsed.x)}}}}});
  const dp={};deps().forEach(d=>dp[d.platform]=(dp[d.platform]||0)+d.amount);const dk=Object.keys(dp);
  mk("#c5",{type:"bar",data:{labels:dk,datasets:[{data:dk.map(k=>dp[k]),backgroundColor:blue,borderRadius:6}]},options:base});
+ const bp={};B.filter(b=>bs(b)>0).forEach(b=>bp[b.platform]=(bp[b.platform]||0)+bs(b));const bpk=Object.keys(bp);
+ mk("#c6",{type:"bar",data:{labels:bpk,datasets:[{data:bpk.map(k=>bp[k]),backgroundColor:pend,borderRadius:6}]},options:base});
 }
 
 /* ---------- forms ---------- */
 const uid=()=>crypto.randomUUID();
 const fd=f=>Object.fromEntries(new FormData(f));
 const bf=$("#bf"),df=$("#df");
-function resetB(){editB=null;bf.reset();bf.betDate.value=today();$("#bsave").textContent="Add bet";$("#bcancel").classList.add("hide");prev()}
+function resetB(){editB=null;bf.reset();bf.platform.value="Football.com";bf.source.value="balance";bf.betDate.value=today();$("#bsave").textContent="Add bet";$("#bcancel").classList.add("hide");prev()}
 function resetD(){editD=null;df.reset();df.date.value=today();$("#dsave").textContent="Add deposit";$("#dcancel").classList.add("hide")}
 function prev(){
  const s=+bf.stake.value,o=+bf.odds.value,x=+bf.bonus.value||0,co=bf.status.value==="cashout";
- $("#colab").classList.toggle("hide",!co);bf.cashout.required=co;
+ $("#colab").classList.toggle("hide",!co);const mx=bf.source.value==="mixed";$("#bslab").classList.toggle("hide",!mx);bf.bonusStake.required=mx;bf.cashout.required=co;
  $("#bprev").innerHTML=co&&s&&bf.cashout.value!==""?`Cash-out: <b>${money(+bf.cashout.value)}</b> · profit/loss: <b class="${+bf.cashout.value>=s?"pos":"neg"}">${sgn(+bf.cashout.value-s)}</b>`:s&&o?`Win amount: <b>${money(s*o+x)}</b>${x?` (incl. ${money(x)} bonus)`:""} · profit if it wins: <b class="pos">${sgn(s*o+x-s)}</b>`:"Win amount is calculated automatically from wager × odds.";
  bf.settledDate.disabled=bf.status.value==="pending";
  if(bf.status.value!=="pending"&&!bf.settledDate.value)bf.settledDate.value=today();
@@ -270,7 +277,8 @@ function prev(){
 bf.addEventListener("input",prev);
 bf.addEventListener("submit",e=>{e.preventDefault();const v=fd(bf);
  if(editB){const cur=D.find(x=>x.id===editB);if(cur&&cur.status!=="pending"){alert("Settled bets can’t be edited.");resetB();return}}
- store.put({id:editB||uid(),kind:"bet",platform:v.platform.trim(),stake:+v.stake,odds:+v.odds,bonus:+v.bonus||0,cashout:v.status==="cashout"?+v.cashout:null,betDate:v.betDate,status:v.status,settledDate:v.status==="pending"?"":v.settledDate||v.betDate});
+ if(v.source==="mixed"&&!(+v.bonusStake>0&&+v.bonusStake<+v.stake)){alert("Stake from bonus must be more than 0 and less than the amount wagered.");return}
+ store.put({id:editB||uid(),kind:"bet",platform:v.platform.trim(),stake:+v.stake,odds:+v.odds,bonus:+v.bonus||0,bonusStake:v.source==="bonus"?+v.stake:v.source==="mixed"?Math.min(+v.bonusStake||0,+v.stake):0,cashout:v.status==="cashout"?+v.cashout:null,betDate:v.betDate,status:v.status,settledDate:v.status==="pending"?"":v.settledDate||v.betDate});
  resetB()});
 df.addEventListener("submit",e=>{e.preventDefault();const v=fd(df);
  store.put({id:editD||uid(),kind:"dep",amount:+v.amount,date:v.date,platform:v.platform.trim(),bank:v.bank.trim()});resetD()});
@@ -282,7 +290,7 @@ document.addEventListener("click",e=>{
  if(x&&confirm("Delete this entry?"))store.del(x.dataset.x);
  if(ed){const o=D.find(i=>i.id===ed.dataset.e);if(!o)return;
   if(o.kind==="bet"&&o.status!=="pending"){alert("Settled bets can’t be edited.");return}
-  if(o.kind==="bet"){editB=o.id;for(const k of["platform","stake","odds","bonus","cashout","betDate","status","settledDate"])bf[k].value=o[k]??"";prev();bf.settledDate.value=o.settledDate||bf.settledDate.value;$("#bsave").textContent="Save changes";$("#bcancel").classList.remove("hide");bf.scrollIntoView({behavior:"smooth",block:"center"})}
+  if(o.kind==="bet"){editB=o.id;for(const k of["platform","stake","odds","bonus","cashout","betDate","status","settledDate"])bf[k].value=o[k]??"";{const x=bs(o);bf.source.value=x<=0?"balance":x>=o.stake?"bonus":"mixed";bf.bonusStake.value=x>0&&x<o.stake?x:""}prev();bf.settledDate.value=o.settledDate||bf.settledDate.value;$("#bsave").textContent="Save changes";$("#bcancel").classList.remove("hide");bf.scrollIntoView({behavior:"smooth",block:"center"})}
   else{editD=o.id;for(const k of["amount","date","platform","bank"])df[k].value=o[k];$("#dsave").textContent="Save changes";$("#dcancel").classList.remove("hide");df.scrollIntoView({behavior:"smooth",block:"center"})}}
 });
 $("#nav").onclick=e=>{const t=e.target.dataset.t;if(!t)return;
