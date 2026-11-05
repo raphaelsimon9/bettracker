@@ -247,16 +247,17 @@ const barLabels={id:"barLabels",afterDatasetsDraw(ch){
  const o=(ch.options.plugins&&ch.options.plugins.barLabels)||{},hz=ch.options.indexAxis==="y",c=ch.ctx;
  const lum=col=>{const m=/^#?([0-9a-f]{6})$/i.exec((col||"").trim());if(!m)return .5;const n=parseInt(m[1],16);return(.299*(n>>16)+.587*((n>>8)&255)+.114*(n&255))/255};
  ch.data.datasets.forEach((ds,i)=>{const meta=ch.getDatasetMeta(i);if(meta.hidden)return;
-  meta.data.forEach((bar,k)=>{const v=Number(ds.data[k]);if(!isFinite(v)||v===0)return;
-   const p=bar.getProps(["x","y","base"],true),txt=o.signed?sgn(v):money(v);
+  meta.data.forEach((bar,k)=>{const dv=Number(ds.data[k]);if(!isFinite(dv)||dv===0)return;
+   const v=o.values?Number(o.values[k]):dv;if(!isFinite(v))return;
+   const p=bar.getProps(["x","y","base","width","height"],true),txt=o.signed?sgn(v):money(v);
    c.save();c.font="600 12px system-ui,sans-serif";c.textBaseline="middle";c.textAlign="center";
    const w=c.measureText(txt).width+10,len=hz?Math.abs(p.x-p.base):Math.abs(p.y-p.base);
-   const fit=len>=(hz?w:20);let tx,ty;
+   const thick=hz?p.height:p.width,fit=len>=w&&thick>=16;let tx,ty;
    if(fit){tx=hz?(p.x+p.base)/2:p.x;ty=hz?p.y:(p.y+p.base)/2;c.fillStyle=lum(bar.options.backgroundColor)>.55?"#0b1410":"#fff"}
    else{c.fillStyle=Chart.defaults.color;
-    if(hz){const r=v>=0;tx=r?Math.max(p.x,p.base)+w/2:Math.min(p.x,p.base)-w/2;ty=p.y}
-    else{ty=v>=0?Math.min(p.y,p.base)-10:Math.max(p.y,p.base)+10;tx=p.x}}
-   c.fillText(txt,tx,ty);c.restore()})})}};
+    if(hz){const r=dv>=0;tx=r?Math.max(p.x,p.base)+w/2:Math.min(p.x,p.base)-w/2;ty=p.y}
+    else{ty=dv>=0?Math.min(p.y,p.base)-w/2-2:Math.max(p.y,p.base)+w/2+2;tx=p.x}}
+   if(hz)c.fillText(txt,tx,ty);else{c.translate(tx,ty);c.rotate(-Math.PI/2);c.fillText(txt,0,0)}c.restore()})})}};
 Chart.register(barLabels);
  }
  const ink=css("--mute"),line=css("--line"),win=css("--win"),loss=css("--loss"),pend=css("--pend"),blue=css("--blue");
@@ -265,7 +266,7 @@ Chart.register(barLabels);
  const mk=(id,cfg)=>charts.push(new Chart($(id),cfg));
  const dly={};S.forEach(b=>{const k=sd(b);dly[k]=(dly[k]||0)+pl(b)});
  const dks=Object.keys(dly).sort();let run=0;const cum=dks.map(k=>run+=dly[k]);
- mk("#c1",{type:"bar",data:{labels:dks,datasets:[{data:cum,backgroundColor:cum.map(v=>v>=0?win:loss),borderRadius:6}]},options:{...base,plugins:{legend:{display:false},barLabels:{signed:true},tooltip:{callbacks:{label:c=>" Cumulative: "+money(c.parsed.y),afterLabel:c=>" That day: "+sgn(dly[dks[c.dataIndex]])}}}}});
+ mk("#c1",{type:"bar",data:{labels:dks,datasets:[{data:cum,backgroundColor:cum.map(v=>v>=0?win:loss),borderRadius:6}]},options:{...base,plugins:{legend:{display:false},barLabels:{signed:true,values:dks.map(k=>dly[k])},tooltip:{callbacks:{label:c=>" Cumulative: "+money(c.parsed.y),afterLabel:c=>" That day: "+sgn(dly[dks[c.dataIndex]])}}}}});
  const m={};S.forEach(b=>{const k=sd(b).slice(0,7);m[k]=(m[k]||0)+pl(b)});const mk_=Object.keys(m).sort();
  mk("#c2",{type:"bar",data:{labels:mk_,datasets:[{data:mk_.map(k=>m[k]),backgroundColor:mk_.map(k=>m[k]>=0?win:loss),borderRadius:6}]},options:{...base,plugins:{...base.plugins,barLabels:{signed:true}}}});
  const wg={};B.forEach(b=>{wg[b.betDate]=(wg[b.betDate]||0)+b.stake});const wks=Object.keys(wg).sort();
