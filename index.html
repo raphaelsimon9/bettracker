@@ -72,8 +72,8 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
  <div class="kpis" id="kpis"></div>
  <div class="grid">
   <div class="card wide"><h3>Cumulative Profit / Loss</h3><div class="ch tall"><canvas id="c1"></canvas></div></div>
+  <div class="card wide"><h3>Daily Wager</h3><div class="ch tall"><canvas id="c3"></canvas></div></div>
   <div class="card"><h3>Monthly Profit / Loss</h3><div class="ch"><canvas id="c2"></canvas></div></div>
-  <div class="card"><h3>Results</h3><div class="ch"><canvas id="c3"></canvas></div></div>
   <div class="card"><h3>Profit / Loss by platform</h3><div class="ch"><canvas id="c4"></canvas></div></div>
   <div class="card"><h3>Deposits by Platform</h3><div class="ch"><canvas id="c5"></canvas></div></div>
   <div class="card"><h3>Balance by Platform</h3><div class="tw"><table id="pbal" style="min-width:0"></table></div></div>
@@ -214,7 +214,7 @@ document.addEventListener("change",e=>{const t=e.target,g=t.dataset&&t.dataset.g
 document.addEventListener("click",e=>{const c=e.target.closest("[data-clear]");if(!c)return;F[c.dataset.clear]=F0()[c.dataset.clear];renderBets();renderDeps()});
 function renderBets(){
  const r=filtB().sort((a,b)=>b.betDate.localeCompare(a.betDate));
- $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":b.status==="pending"?`<span style="color:var(--pend)">${money(winAmt(b))}</span> (Potential)`:"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td>${b.status==="pending"?`<button class="ic" data-e="${b.id}">Edit</button>`:`<button class="ic" disabled style="opacity:.4">Locked</button>`}<button class="ic" data-x="${b.id}">Delete</button></td></tr>`}).join(""):`<tr><td colspan="10" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
+ $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":b.status==="pending"?`<span style="color:var(--pend)">${money(winAmt(b))}</span> (Potential)`:"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td>${b.status==="pending"?`<button class="ic" data-e="${b.id}">Edit</button>`:`<button class="ic" disabled style="opacity:.4">Settled</button>`}${b.status==="pending"?`<button class="ic" data-x="${b.id}">Delete</button>`:""}</td></tr>`}).join(""):`<tr><td colspan="10" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
 }
 function renderDeps(){
  const r=filtD().sort((a,b)=>b.date.localeCompare(a.date));
@@ -245,7 +245,8 @@ function renderReport(){
  mk("#c1",{type:"bar",data:{labels:dks,datasets:[{data:cum,backgroundColor:cum.map(v=>v>=0?win:loss),borderRadius:6}]},options:{...base,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" Cumulative: "+money(c.parsed.y),afterLabel:c=>" That day: "+sgn(dly[dks[c.dataIndex]])}}}}});
  const m={};S.forEach(b=>{const k=sd(b).slice(0,7);m[k]=(m[k]||0)+pl(b)});const mk_=Object.keys(m).sort();
  mk("#c2",{type:"bar",data:{labels:mk_,datasets:[{data:mk_.map(k=>m[k]),backgroundColor:mk_.map(k=>m[k]>=0?win:loss),borderRadius:6}]},options:base});
- mk("#c3",{type:"doughnut",data:{labels:["Won","Lost","Cashed out","Pending"],datasets:[{data:[W.length,L.length,C.length,Pn.length],backgroundColor:[win,loss,blue,pend],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"68%",plugins:{legend:{position:"bottom"}}}});
+ const wg={};B.forEach(b=>{wg[b.betDate]=(wg[b.betDate]||0)+b.stake});const wks=Object.keys(wg).sort();
+ mk("#c3",{type:"bar",data:{labels:wks,datasets:[{data:wks.map(k=>wg[k]),backgroundColor:blue,borderRadius:6}]},options:{...base,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" Wagered: "+money(c.parsed.y)}}}}});
  const pp={};S.forEach(b=>pp[b.platform]=(pp[b.platform]||0)+pl(b));const pk=Object.keys(pp);
  mk("#c4",{type:"bar",data:{labels:pk,datasets:[{data:pk.map(k=>pp[k]),backgroundColor:pk.map(k=>pp[k]>=0?win:loss),borderRadius:6}]},options:{...base,indexAxis:"y",scales:{y:{grid:{display:false}},x:{ticks:{callback:v=>CUR+Number(v).toLocaleString()}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+money(c.parsed.x)}}}}});
  const dp={};deps().forEach(d=>dp[d.platform]=(dp[d.platform]||0)+d.amount);const dk=Object.keys(dp);
@@ -277,6 +278,7 @@ $("#bcancel").onclick=resetB;$("#dcancel").onclick=resetD;
 
 document.addEventListener("click",e=>{
  const x=e.target.closest("[data-x]"),ed=e.target.closest("[data-e]");
+ if(x){const t=D.find(i=>i.id===x.dataset.x);if(t&&t.kind==="bet"&&t.status!=="pending"){alert("Settled bets can’t be deleted.");return}}
  if(x&&confirm("Delete this entry?"))store.del(x.dataset.x);
  if(ed){const o=D.find(i=>i.id===ed.dataset.e);if(!o)return;
   if(o.kind==="bet"&&o.status!=="pending"){alert("Settled bets can’t be edited.");return}
