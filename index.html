@@ -76,7 +76,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   <div class="card"><h3>Monthly Profit / Loss</h3><div class="ch"><canvas id="c2"></canvas></div></div>
   <div class="card"><h3>Profit / Loss by platform</h3><div class="ch"><canvas id="c4"></canvas></div></div>
   <div class="card"><h3>Deposits by Platform</h3><div class="ch"><canvas id="c5"></canvas></div></div>
-  <div class="card"><h3>Platform Bonus Wagered</h3><div class="ch"><canvas id="c6"></canvas></div></div>
+  <div class="card"><h3>Platform Bonus Wagered by Platform</h3><div class="ch"><canvas id="c6"></canvas></div></div>
   <div class="card"><h3>Balance by Platform</h3><div class="tw"><table id="pbal" style="min-width:0"></table></div></div>
  </div>
 </section>
@@ -241,19 +241,37 @@ function renderReport(){
  $("#pbal").innerHTML=pk2.length?`<thead><tr><th>Platform</th><th>Deposited</th><th>Net P/L</th><th>Balance</th></tr></thead><tbody>`+pk2.map(p=>{const r=pb[p],v=r.d+r.n-r.s;return`<tr><td>${esc(p)}</td><td>${money(r.d)}</td><td class="${r.n>0?"pos":r.n<0?"neg":""}">${sgn(r.n)}</td><td class="${v>0?"pos":v<0?"neg":""}"><b>${money(v)}</b></td></tr>`}).join("")+"</tbody>":`<tbody><tr><td class="empty">Add a deposit to see balances.</td></tr></tbody>`;
  if(typeof Chart==="undefined")return;
  charts.forEach(c=>c.destroy());charts=[];
+ if(!Chart.registry.plugins.get("barLabels")){
+const barLabels={id:"barLabels",afterDatasetsDraw(ch){
+ if(ch.config.type!=="bar")return;
+ const o=(ch.options.plugins&&ch.options.plugins.barLabels)||{},hz=ch.options.indexAxis==="y",c=ch.ctx;
+ const lum=col=>{const m=/^#?([0-9a-f]{6})$/i.exec((col||"").trim());if(!m)return .5;const n=parseInt(m[1],16);return(.299*(n>>16)+.587*((n>>8)&255)+.114*(n&255))/255};
+ ch.data.datasets.forEach((ds,i)=>{const meta=ch.getDatasetMeta(i);if(meta.hidden)return;
+  meta.data.forEach((bar,k)=>{const v=Number(ds.data[k]);if(!isFinite(v)||v===0)return;
+   const p=bar.getProps(["x","y","base"],true),txt=o.signed?sgn(v):money(v);
+   c.save();c.font="600 12px system-ui,sans-serif";c.textBaseline="middle";c.textAlign="center";
+   const w=c.measureText(txt).width+10,len=hz?Math.abs(p.x-p.base):Math.abs(p.y-p.base);
+   const fit=len>=(hz?w:20);let tx,ty;
+   if(fit){tx=hz?(p.x+p.base)/2:p.x;ty=hz?p.y:(p.y+p.base)/2;c.fillStyle=lum(bar.options.backgroundColor)>.55?"#0b1410":"#fff"}
+   else{c.fillStyle=Chart.defaults.color;
+    if(hz){const r=v>=0;tx=r?Math.max(p.x,p.base)+w/2:Math.min(p.x,p.base)-w/2;ty=p.y}
+    else{ty=v>=0?Math.min(p.y,p.base)-10:Math.max(p.y,p.base)+10;tx=p.x}}
+   c.fillText(txt,tx,ty);c.restore()})})}};
+Chart.register(barLabels);
+ }
  const ink=css("--mute"),line=css("--line"),win=css("--win"),loss=css("--loss"),pend=css("--pend"),blue=css("--blue");
  Chart.defaults.color=ink;Chart.defaults.font.family="system-ui,sans-serif";Chart.defaults.borderColor=line;
- const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+money(c.parsed.y??c.parsed)}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>CUR+Number(v).toLocaleString()}}}};
+ const base={responsive:true,maintainAspectRatio:false,layout:{padding:{top:18,right:36}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+money(c.parsed.y??c.parsed)}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>CUR+Number(v).toLocaleString()}}}};
  const mk=(id,cfg)=>charts.push(new Chart($(id),cfg));
  const dly={};S.forEach(b=>{const k=sd(b);dly[k]=(dly[k]||0)+pl(b)});
  const dks=Object.keys(dly).sort();let run=0;const cum=dks.map(k=>run+=dly[k]);
- mk("#c1",{type:"bar",data:{labels:dks,datasets:[{data:cum,backgroundColor:cum.map(v=>v>=0?win:loss),borderRadius:6}]},options:{...base,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" Cumulative: "+money(c.parsed.y),afterLabel:c=>" That day: "+sgn(dly[dks[c.dataIndex]])}}}}});
+ mk("#c1",{type:"bar",data:{labels:dks,datasets:[{data:cum,backgroundColor:cum.map(v=>v>=0?win:loss),borderRadius:6}]},options:{...base,plugins:{legend:{display:false},barLabels:{signed:true},tooltip:{callbacks:{label:c=>" Cumulative: "+money(c.parsed.y),afterLabel:c=>" That day: "+sgn(dly[dks[c.dataIndex]])}}}}});
  const m={};S.forEach(b=>{const k=sd(b).slice(0,7);m[k]=(m[k]||0)+pl(b)});const mk_=Object.keys(m).sort();
- mk("#c2",{type:"bar",data:{labels:mk_,datasets:[{data:mk_.map(k=>m[k]),backgroundColor:mk_.map(k=>m[k]>=0?win:loss),borderRadius:6}]},options:base});
+ mk("#c2",{type:"bar",data:{labels:mk_,datasets:[{data:mk_.map(k=>m[k]),backgroundColor:mk_.map(k=>m[k]>=0?win:loss),borderRadius:6}]},options:{...base,plugins:{...base.plugins,barLabels:{signed:true}}}});
  const wg={};B.forEach(b=>{wg[b.betDate]=(wg[b.betDate]||0)+b.stake});const wks=Object.keys(wg).sort();
  mk("#c3",{type:"bar",data:{labels:wks,datasets:[{data:wks.map(k=>wg[k]),backgroundColor:blue,borderRadius:6}]},options:{...base,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" Wagered: "+money(c.parsed.y)}}}}});
  const pp={};S.forEach(b=>pp[b.platform]=(pp[b.platform]||0)+pl(b));const pk=Object.keys(pp);
- mk("#c4",{type:"bar",data:{labels:pk,datasets:[{data:pk.map(k=>pp[k]),backgroundColor:pk.map(k=>pp[k]>=0?win:loss),borderRadius:6}]},options:{...base,indexAxis:"y",scales:{y:{grid:{display:false}},x:{ticks:{callback:v=>CUR+Number(v).toLocaleString()}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+money(c.parsed.x)}}}}});
+ mk("#c4",{type:"bar",data:{labels:pk,datasets:[{data:pk.map(k=>pp[k]),backgroundColor:pk.map(k=>pp[k]>=0?win:loss),borderRadius:6}]},options:{...base,indexAxis:"y",scales:{y:{grid:{display:false}},x:{ticks:{callback:v=>CUR+Number(v).toLocaleString()}}},plugins:{legend:{display:false},barLabels:{signed:true},tooltip:{callbacks:{label:c=>" "+money(c.parsed.x)}}}}});
  const dp={};deps().forEach(d=>dp[d.platform]=(dp[d.platform]||0)+d.amount);const dk=Object.keys(dp);
  mk("#c5",{type:"bar",data:{labels:dk,datasets:[{data:dk.map(k=>dp[k]),backgroundColor:blue,borderRadius:6}]},options:base});
  const bp={};B.filter(b=>bs(b)>0).forEach(b=>bp[b.platform]=(bp[b.platform]||0)+bs(b));const bpk=Object.keys(bp);
