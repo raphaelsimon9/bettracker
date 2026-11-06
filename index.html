@@ -12,6 +12,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .wrap{max-width:1080px;margin:0 auto;padding:18px 16px 60px}
 header{margin-bottom:16px}.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);padding:8px 0}.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px}.balbox{text-align:right}.bl{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.bv{font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.15}.bs{color:var(--mute);font-size:10px}
+.bd{font-size:11px;color:var(--mute);margin-top:2px;white-space:nowrap}.bd b{color:var(--ink);font-weight:700}.bd b.pos{color:var(--win)}.bd b.neg{color:var(--loss)}
 h1{font-size:22px;margin:0;letter-spacing:-.02em}
 h1 span{color:var(--win)}
 .sub{color:var(--mute);font-size:12px}
@@ -63,7 +64,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 <div class="wrap hide" id="app">
 <header>
  <div class="top"><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
- <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">Deposits + P/L − Pending</div></div></div>
+ <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">Deposits + P/L − Pending</div><div class="bd"><span>Yesterday Start Bal:</span> <b id="ysb">₦0</b></div><div class="bd"><span>Today Start Bal:</span> <b id="tsb">₦0</b></div><div class="bd"><span>Yesterday Change:</span> <b id="ych">₦0</b></div><div class="bd"><span>Today So Far:</span> <b id="tsf">₦0</b></div></div></div>
  <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button></nav>
  <button class="btn g" id="out">Sign out</button></div>
 </header>
@@ -179,6 +180,13 @@ const winAmt=b=>b.stake*b.odds+(b.bonus||0);
 const bs=b=>Math.min(+b.bonusStake||0,b.stake),balS=b=>b.stake-bs(b);
 const pl=b=>b.status==="won"?winAmt(b)-b.stake:b.status==="lost"?-balS(b):b.status==="cashout"?Math.max((b.cashout||0)-b.stake,-balS(b)):0;
 const sd=b=>b.settledDate||b.betDate;
+/* balance as at the END of date c (YYYY-MM-DD): deposits made + P/L of bets settled by then − stakes still pending at that point */
+const balAt=c=>{
+ const dep=deps().filter(d=>d.date<=c).reduce((a,d)=>a+d.amount,0);
+ let net=0,pend=0;
+ bets().forEach(b=>{if(b.betDate>c)return;
+  if(b.status!=="pending"&&sd(b)<=c)net+=pl(b);else pend+=balS(b)});
+ return dep+net-pend};
 
 /* ---------- render ---------- */
 function render(){lists();renderReport();renderBets();renderDeps()}
@@ -232,8 +240,11 @@ function renderReport(){
  const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),pendBal=Pn.reduce((a,b)=>a+balS(b),0),bal=dep+net-pendBal;
  const wBal=B.reduce((a,b)=>a+balS(b),0),wBon=B.reduce((a,b)=>a+bs(b),0);
  const pot=Pn.reduce((a,b)=>a+winAmt(b),0);
+ const tdW=B.filter(b=>b.betDate===today());
  const hb=$("#hbal");hb.textContent=money(bal);hb.className="bv "+(bal>0?"pos":bal<0?"neg":"");
- $("#kpis").innerHTML=k("Net Profit / Loss",sgn(net),`<div class="cnt"><div><b>${B.length}</b>Total Bets</div><div><b style="color:var(--pend)">${Pn.length}</b>Pending</div><div><b class="pos">${W.length}</b>Won</div><div><b class="neg">${L.length}</b>Lost</div><div><b style="color:var(--blue)">${C.length}</b>Cashed Out</div></div>`,net>0?"pos":net<0?"neg":"")+k("Total Deposited",money(dep),`${deps().length} Deposits`)+k("Total Wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} Bets`)+k("Total Bet Amount",money(wBal+wBon),`<div class="cnt"><div><b>${money(wBal)}</b>From Main Balance</div><div><b style="color:var(--pend)">${money(wBon)}</b>From Platform Bonus</div></div>`)+k("Win Rate",wr.toFixed(1)+"%",`of ${S.length} Settled Bets`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","Profit ÷ Settled Stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses Won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"Added to Winnings")+k("Pending",String(Pn.length),money(pendAmt)+" At Stake")+k("Potential Winnings",money(pot),`${sgn(pot-pendAmt)} Profit If All Win`);
+ const ys=balAt(dAgo(2)),ts=balAt(dAgo(1)),setB=(id,v,sg)=>{const e=$(id);e.textContent=sg?sgn(v):money(v);e.className=sg?(v>0?"pos":v<0?"neg":""):""};
+ setB("#ysb",ys);setB("#tsb",ts);setB("#ych",ts-ys,1);setB("#tsf",bal-ts,1);
+ $("#kpis").innerHTML=k("Net Profit / Loss",sgn(net),`<div class="cnt"><div><b>${B.length}</b>Total Bets</div><div><b style="color:var(--pend)">${Pn.length}</b>Pending</div><div><b class="pos">${W.length}</b>Won</div><div><b class="neg">${L.length}</b>Lost</div><div><b style="color:var(--blue)">${C.length}</b>Cashed Out</div></div>`,net>0?"pos":net<0?"neg":"")+k("Total Deposited",money(dep),`${deps().length} Deposits`)+k("Total Wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} Bets<div class="cnt"><div><b style="color:var(--blue)">${money(tdW.reduce((a,b)=>a+b.stake,0))}</b>Wagered Today · ${tdW.length} ${tdW.length===1?"Bet":"Bets"}</div></div>`)+k("Total Bet Amount",money(wBal+wBon),`<div class="cnt"><div><b>${money(wBal)}</b>From Main Balance</div><div><b style="color:var(--pend)">${money(wBon)}</b>From Platform Bonus</div></div>`)+k("Win Rate",wr.toFixed(1)+"%",`of ${S.length} Settled Bets`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","Profit ÷ Settled Stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses Won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"Added to Winnings")+k("Pending",String(Pn.length),money(pendAmt)+" At Stake")+k("Potential Winnings",money(pot),`${sgn(pot-pendAmt)} Profit If All Win`);
  $("#kpis").firstElementChild.style.gridColumn="span 2";
  const pb={};const row=p=>pb[p]=pb[p]||{d:0,n:0,s:0};
  deps().forEach(d=>row(d.platform).d+=d.amount);B.forEach(b=>{const r=row(b.platform);b.status==="pending"?r.s+=b.stake:r.n+=pl(b)});
