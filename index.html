@@ -41,7 +41,7 @@ table{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
 th{text-align:left;color:var(--mute);font-weight:600;font-size:12px;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .pill{padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
-.pill.won{background:color-mix(in srgb,var(--win) 18%,transparent);color:var(--win)}
+.pill.won,.pill.successful{background:color-mix(in srgb,var(--win) 18%,transparent);color:var(--win)}
 .pill.lost{background:color-mix(in srgb,var(--loss) 18%,transparent);color:var(--loss)}
 .pill.cashout{background:color-mix(in srgb,var(--blue) 20%,transparent);color:var(--blue)}
 .pill.pending{background:color-mix(in srgb,var(--pend) 20%,transparent);color:var(--pend)}
@@ -64,8 +64,8 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 <div class="wrap hide" id="app">
 <header>
  <div class="top"><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
- <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">Deposits + P/L − Pending</div><div class="bd"><span>Yesterday Start Bal:</span> <b id="ysb">₦0</b></div><div class="bd"><span>Today Start Bal:</span> <b id="tsb">₦0</b></div><div class="bd"><span>Yesterday Change:</span> <b id="ych">₦0</b></div><div class="bd"><span>Today So Far:</span> <b id="tsf">₦0</b></div></div></div>
- <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button></nav>
+ <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">Deposits + P/L − Pending − Withdrawals</div><div class="bd"><span>Yesterday Start Bal:</span> <b id="ysb">₦0</b></div><div class="bd"><span>Today Start Bal:</span> <b id="tsb">₦0</b></div><div class="bd"><span>Yesterday Change:</span> <b id="ych">₦0</b></div><div class="bd"><span>Today So Far:</span> <b id="tsf">₦0</b></div></div></div>
+ <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button><button data-t="wds">Withdrawals</button></nav>
  <button class="btn g" id="out">Sign out</button></div>
 </header>
 
@@ -78,6 +78,8 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   <div class="card"><h3>Profit / Loss by platform</h3><div class="ch"><canvas id="c4"></canvas></div></div>
   <div class="card"><h3>Deposits by Platform</h3><div class="ch"><canvas id="c5"></canvas></div></div>
   <div class="card"><h3>Platform Bonus Wagered by Platform</h3><div class="ch"><canvas id="c6"></canvas></div></div>
+  <div class="card"><h3>Deposits vs Withdrawals by Month</h3><div class="ch"><canvas id="c7"></canvas></div></div>
+  <div class="card"><h3>Withdrawals by Bank</h3><div class="ch"><canvas id="c8"></canvas></div></div>
   <div class="card"><h3>Balance by Platform</h3><div class="tw"><table id="pbal" style="min-width:0"></table></div></div>
  </div>
 </section>
@@ -120,6 +122,24 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   <div class="tw"><table><thead><tr><th>Date</th><th>Amount</th><th>Platform</th><th>Bank</th><th></th></tr></thead><tbody id="dtb"></tbody></table></div>
  </div>
 </section>
+<section id="wds" class="hide">
+ <div class="card">
+  <form id="wf">
+   <label>Amount (₦)<input name="amount" type="number" step="0.01" min="0.01" required></label>
+   <label>Date &amp; Time<input name="at" type="datetime-local" required></label>
+   <label>Withdrawn From<span class="combo"><input name="platform" data-list="pl" autocomplete="off" required><button type="button" class="cb" tabindex="-1" aria-label="Show options">▾</button><span class="cl hide"></span></span></label>
+   <label>Bank Withdrawn To<span class="combo"><input name="bank" data-list="bk" autocomplete="off" required><button type="button" class="cb" tabindex="-1" aria-label="Show options">▾</button><span class="cl hide"></span></span></label>
+   <label>Account (Last 6 Digits)<input name="acct" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" placeholder="123456" required></label>
+   <label>Status<select name="status"><option value="pending">Pending</option><option value="successful">Successful</option></select></label>
+   <div class="prev" id="wprev"></div>
+   <div style="display:flex;gap:8px"><button class="btn" id="wsave">Add Withdrawal</button><button type="button" class="btn g hide" id="wcancel">Cancel</button></div>
+  </form>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <div id="wfil"></div>
+  <div class="tw"><table><thead><tr><th>Date &amp; Time</th><th>Amount</th><th>Withdrawn From</th><th>Bank</th><th>Account</th><th>Status</th><th></th></tr></thead><tbody id="wtb"></tbody></table></div>
+ </div>
+</section>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -130,19 +150,23 @@ const $=s=>document.querySelector(s);
 const money=n=>(n<0?"−":"")+CUR+Math.abs(n).toLocaleString("en-NG",{maximumFractionDigits:2});
 const sgn=n=>(n>0?"+":"")+money(n);
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const nowLocal=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,16)};
+const toLocalDT=iso=>{const d=new Date(iso);return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,16)};
+const fmtDT=s=>s.slice(0,10)+" · "+new Date(s).toLocaleTimeString("en-NG",{hour:"numeric",minute:"2-digit"});
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-let OPT={pl:[],bk:[]},D=[],charts=[],editB=null,editD=null;
+let OPT={pl:[],bk:[]},D=[],charts=[],editB=null,editD=null,editW=null;
 
 /* ---------- storage: Supabase (Postgres + auth + row-level security) ---------- */
 const SB=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);
 const toBet=r=>({id:r.id,kind:"bet",platform:r.platform,stake:+r.stake,odds:+r.odds,bonus:+r.bonus||0,cashout:r.cashout==null?null:+r.cashout,betDate:r.bet_date,bonusStake:+r.bonus_stake||0,status:r.status,settledDate:r.settled_date||""});
 const toDep=r=>({id:r.id,kind:"dep",amount:+r.amount,date:r.deposit_date,platform:r.platform,bank:r.bank});
+const toWd=r=>({id:r.id,kind:"wd",amount:+r.amount,at:toLocalDT(r.withdrawn_at),platform:r.platform,bank:r.bank,acct:r.account_last6,status:r.status});
 async function pull(){
  $("#sync").textContent="Syncing…";
- const [b,d]=await Promise.all([SB.from("bets").select("*"),SB.from("deposits").select("*")]);
+ const [b,d,w]=await Promise.all([SB.from("bets").select("*"),SB.from("deposits").select("*"),SB.from("withdrawals").select("*")]);
  if(b.error||d.error){$("#sync").textContent="Couldn’t load — check your connection";return}
- D=[...b.data.map(toBet),...d.data.map(toDep)];$("#sync").textContent="Synced";render();
+ D=[...b.data.map(toBet),...d.data.map(toDep),...(w.error?[]:w.data.map(toWd))];$("#sync").textContent=w.error?"Synced — withdrawals table missing, run withdrawals.sql in Supabase":"Synced";render();
 }
 const fail=r=>{alert("Couldn’t save: "+r.error.message);pull()};
 const store={
@@ -150,12 +174,14 @@ const store={
   const i=D.findIndex(x=>x.id===o.id);i<0?D.push(o):D[i]=o;render();
   const r=o.kind==="bet"
    ?await SB.from("bets").upsert({id:o.id,platform:o.platform,stake:o.stake,odds:o.odds,bonus:o.bonus||0,cashout:o.cashout??null,bet_date:o.betDate,bonus_stake:o.bonusStake||0,status:o.status,settled_date:o.settledDate||null})
+   :o.kind==="wd"
+   ?await SB.from("withdrawals").upsert({id:o.id,amount:o.amount,withdrawn_at:new Date(o.at).toISOString(),platform:o.platform,bank:o.bank,account_last6:o.acct,status:o.status})
    :await SB.from("deposits").upsert({id:o.id,amount:o.amount,deposit_date:o.date,platform:o.platform,bank:o.bank});
   if(r.error)fail(r);
  },
  async del(id){
   const o=D.find(x=>x.id===id);if(!o)return;D=D.filter(x=>x.id!==id);render();
-  const r=await SB.from(o.kind==="bet"?"bets":"deposits").delete().eq("id",id);if(r.error)fail(r);
+  const r=await SB.from(o.kind==="bet"?"bets":o.kind==="wd"?"withdrawals":"deposits").delete().eq("id",id);if(r.error)fail(r);
  }
 };
 function show(session){
@@ -180,23 +206,29 @@ const winAmt=b=>b.stake*b.odds+(b.bonus||0);
 const bs=b=>Math.min(+b.bonusStake||0,b.stake),balS=b=>b.stake-bs(b);
 const pl=b=>b.status==="won"?winAmt(b)-b.stake:b.status==="lost"?-balS(b):b.status==="cashout"?Math.max((b.cashout||0)-b.stake,-balS(b)):0;
 const sd=b=>b.settledDate||b.betDate;
+const wds=()=>D.filter(x=>x.kind==="wd");
+const wd=w=>w.at.slice(0,10);
+const wTot=()=>wds().reduce((a,w)=>a+w.amount,0);
+/* current balance: deposits + P/L of settled bets − stakes pending − every withdrawal (pending or successful) */
+const balance=()=>{const B=bets();return deps().reduce((a,d)=>a+d.amount,0)+B.filter(b=>b.status!=="pending").reduce((a,b)=>a+pl(b),0)-B.filter(b=>b.status==="pending").reduce((a,b)=>a+balS(b),0)-wTot()};
 /* balance as at the END of date c (YYYY-MM-DD): deposits made + P/L of bets settled by then − stakes still pending at that point */
 const balAt=c=>{
  const dep=deps().filter(d=>d.date<=c).reduce((a,d)=>a+d.amount,0);
  let net=0,pend=0;
  bets().forEach(b=>{if(b.betDate>c)return;
   if(b.status!=="pending"&&sd(b)<=c)net+=pl(b);else pend+=balS(b)});
- return dep+net-pend};
+ const wdr=wds().filter(w=>wd(w)<=c).reduce((a,w)=>a+w.amount,0);
+ return dep+net-pend-wdr};
 
 /* ---------- render ---------- */
-function render(){lists();renderReport();renderBets();renderDeps()}
+function render(){lists();renderReport();renderBets();renderDeps();renderWds()}
 function lists(){
  const P=[...new Set(["Football.com","Sportybet","Bet9ja","Stake","1xBet",...D.map(x=>x.platform)])];
- const B=[...new Set(["Stanbic IBTC","UBA","First Bank","Opay","GTBank","Access Bank","Zenith Bank","Kuda","Moniepoint",...deps().map(x=>x.bank)])];
+ const B=[...new Set(["Stanbic IBTC","UBA","First Bank","Opay","GTBank","Access Bank","Zenith Bank","Kuda","Moniepoint",...deps().map(x=>x.bank),...wds().map(x=>x.bank)])];
  OPT.pl=P;OPT.bk=B;
 }
 /* ---------- filters ---------- */
-const F0=()=>({b:{res:"all",plat:"all",date:"all",from:"",to:""},d:{plat:"all",bank:"all",date:"all",from:"",to:""}});
+const F0=()=>({b:{res:"all",plat:"all",date:"all",from:"",to:""},d:{plat:"all",bank:"all",date:"all",from:"",to:""},w:{plat:"all",bank:"all",status:"all",date:"all",from:"",to:""}});
 const F=F0();
 const dAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 function inDate(x,f){const t=today();if(f.date==="today")return x===t;if(f.date==="7d")return x>=dAgo(6);if(f.date==="month")return x.slice(0,7)===t.slice(0,7);if(f.date==="custom")return(!f.from||x>=f.from)&&(!f.to||x<=f.to);return true}
@@ -222,8 +254,8 @@ function filtD(){
   +fsum("d",`Showing ${r.length} of ${A.length} deposits · Total ${money(r.reduce((a,d)=>a+d.amount,0))}`,f.bank!=="all"||f.plat!=="all"||f.date!=="all");
  return r;
 }
-document.addEventListener("change",e=>{const t=e.target,g=t.dataset&&t.dataset.g;if(!g)return;F[g][t.dataset.k]=t.value;renderBets();renderDeps()});
-document.addEventListener("click",e=>{const c=e.target.closest("[data-clear]");if(!c)return;F[c.dataset.clear]=F0()[c.dataset.clear];renderBets();renderDeps()});
+document.addEventListener("change",e=>{const t=e.target,g=t.dataset&&t.dataset.g;if(!g)return;F[g][t.dataset.k]=t.value;renderBets();renderDeps();renderWds()});
+document.addEventListener("click",e=>{const c=e.target.closest("[data-clear]");if(!c)return;F[c.dataset.clear]=F0()[c.dataset.clear];renderBets();renderDeps();renderWds()});
 function renderBets(){
  const r=filtB().sort((a,b)=>b.betDate.localeCompare(a.betDate));
  $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${bs(b)<=0?"Main Balance":balS(b)<=0?"Platform Bonus":money(balS(b))+" Balance + "+money(bs(b))+" Bonus"}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":b.status==="pending"?`<span style="color:var(--pend)">${money(winAmt(b))}</span> (Potential)`:"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td>${b.status==="pending"?`<button class="ic" data-e="${b.id}">Edit</button>`:`<button class="ic" disabled style="opacity:.4">Settled</button>`}${b.status==="pending"?`<button class="ic" data-x="${b.id}">Delete</button>`:""}</td></tr>`}).join(""):`<tr><td colspan="11" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
@@ -232,12 +264,26 @@ function renderDeps(){
  const r=filtD().sort((a,b)=>b.date.localeCompare(a.date));
  $("#dtb").innerHTML=r.length?r.map(d=>`<tr><td>${d.date}</td><td>${money(d.amount)}</td><td>${esc(d.platform)}</td><td>${esc(d.bank)}</td><td><button class="ic" data-e="${d.id}">Edit</button><button class="ic" data-x="${d.id}">Delete</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">${deps().length?"No deposits match these filters.":"No deposits yet."}</td></tr>`;
 }
+function filtW(){
+ const f=F.w,A=wds(),pls=OPT.pl.filter(p=>A.some(w=>w.platform===p)),bks=OPT.bk.filter(p=>A.some(w=>w.bank===p));
+ if(f.plat!=="all"&&!pls.includes(f.plat))f.plat="all";if(f.bank!=="all"&&!bks.includes(f.bank))f.bank="all";
+ const r=A.filter(w=>(f.plat==="all"||w.platform===f.plat)&&(f.bank==="all"||w.bank===f.bank)&&(f.status==="all"||w.status===f.status)&&inDate(wd(w),f));
+ const pn=r.filter(w=>w.status==="pending").reduce((a,w)=>a+w.amount,0);
+ $("#wfil").innerHTML=`<div class="fbar">`+dsel("w",f)+sel("w","bank","Bank",f.bank,[["all","All Banks"],...bks.map(p=>[p,p])])+sel("w","plat","Platform",f.plat,[["all","All Platforms"],...pls.map(p=>[p,p])])+sel("w","status","Status",f.status,[["all","All Statuses"],["successful","Successful"],["pending","Pending"]])+`</div>`
+  +fsum("w",`Showing ${r.length} of ${A.length} withdrawals · Total ${money(r.reduce((a,w)=>a+w.amount,0))}${pn?` · Pending ${money(pn)}`:""}`,f.bank!=="all"||f.plat!=="all"||f.status!=="all"||f.date!=="all");
+ return r;
+}
+function renderWds(){
+ const r=filtW().sort((a,b)=>b.at.localeCompare(a.at));
+ $("#wtb").innerHTML=r.length?r.map(w=>`<tr><td>${fmtDT(w.at)}</td><td>${money(w.amount)}</td><td>${esc(w.platform)}</td><td>${esc(w.bank)}</td><td>•••• ${esc(w.acct)}</td><td><span class="pill ${w.status}">${w.status==="successful"?"Successful":"Pending"}</span></td><td>${w.status==="pending"?`<button class="ic" data-ok="${w.id}">Mark Successful</button>`:""}<button class="ic" data-e="${w.id}">Edit</button><button class="ic" data-x="${w.id}">Delete</button></td></tr>`).join(""):`<tr><td colspan="7" class="empty">${wds().length?"No withdrawals match these filters.":"No withdrawals yet."}</td></tr>`;
+ wprev();
+}
 function renderReport(){
  const B=bets(),S=B.filter(b=>b.status!=="pending"),W=S.filter(b=>b.status==="won"),L=S.filter(b=>b.status==="lost"),C=S.filter(b=>b.status==="cashout"),Pn=B.filter(b=>b.status==="pending");
  const net=S.reduce((a,b)=>a+pl(b),0),staked=S.reduce((a,b)=>a+balS(b),0),dep=deps().reduce((a,d)=>a+d.amount,0);
  const wr=S.length?(W.length+C.filter(b=>pl(b)>0).length)/S.length*100:0,roi=staked?net/staked*100:0;
  const k=(l,v,s,c="")=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
- const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),pendBal=Pn.reduce((a,b)=>a+balS(b),0),bal=dep+net-pendBal;
+ const pendAmt=Pn.reduce((a,b)=>a+b.stake,0),pendBal=Pn.reduce((a,b)=>a+balS(b),0),wAll=wTot(),bal=dep+net-pendBal-wAll;
  const wBal=B.reduce((a,b)=>a+balS(b),0),wBon=B.reduce((a,b)=>a+bs(b),0);
  const pot=Pn.reduce((a,b)=>a+winAmt(b),0);
  const tdW=B.filter(b=>b.betDate===today());
@@ -246,10 +292,16 @@ function renderReport(){
  setB("#ysb",ys);setB("#tsb",ts);setB("#ych",ts-ys,1);setB("#tsf",bal-ts,1);
  $("#kpis").innerHTML=k("Net Profit / Loss",sgn(net),`<div class="cnt"><div><b>${B.length}</b>Total Bets</div><div><b style="color:var(--pend)">${Pn.length}</b>Pending</div><div><b class="pos">${W.length}</b>Won</div><div><b class="neg">${L.length}</b>Lost</div><div><b style="color:var(--blue)">${C.length}</b>Cashed Out</div></div>`,net>0?"pos":net<0?"neg":"")+k("Total Deposited",money(dep),`${deps().length} Deposits`)+k("Total Wagered",money(B.reduce((a,b)=>a+b.stake,0)),`${B.length} Bets<div class="cnt"><div><b style="color:var(--blue)">${money(tdW.reduce((a,b)=>a+b.stake,0))}</b>Wagered Today · ${tdW.length} ${tdW.length===1?"Bet":"Bets"}</div></div>`)+k("Total Bet Amount",money(wBal+wBon),`<div class="cnt"><div><b>${money(wBal)}</b>From Main Balance</div><div><b style="color:var(--pend)">${money(wBon)}</b>From Platform Bonus</div></div>`)+k("Win Rate",wr.toFixed(1)+"%",`of ${S.length} Settled Bets`)+k("ROI",(roi>0?"+":"")+roi.toFixed(1)+"%","Profit ÷ Settled Stakes",roi>0?"pos":roi<0?"neg":"")+k("Bonuses Won",money(W.reduce((a,b)=>a+(b.bonus||0),0)),"Added to Winnings")+k("Pending",String(Pn.length),money(pendAmt)+" At Stake")+k("Potential Winnings",money(pot),`${sgn(pot-pendAmt)} Profit If All Win`);
  $("#kpis").firstElementChild.style.gridColumn="span 2";
- const pb={};const row=p=>pb[p]=pb[p]||{d:0,n:0,s:0};
- deps().forEach(d=>row(d.platform).d+=d.amount);B.forEach(b=>{const r=row(b.platform);b.status==="pending"?r.s+=b.stake:r.n+=pl(b)});
- const pk2=Object.keys(pb).sort((a,b)=>(pb[b].d+pb[b].n-pb[b].s)-(pb[a].d+pb[a].n-pb[a].s));
- $("#pbal").innerHTML=pk2.length?`<thead><tr><th>Platform</th><th>Deposited</th><th>Net P/L</th><th>Balance</th></tr></thead><tbody>`+pk2.map(p=>{const r=pb[p],v=r.d+r.n-r.s;return`<tr><td>${esc(p)}</td><td>${money(r.d)}</td><td class="${r.n>0?"pos":r.n<0?"neg":""}">${sgn(r.n)}</td><td class="${v>0?"pos":v<0?"neg":""}"><b>${money(v)}</b></td></tr>`}).join("")+"</tbody>":`<tbody><tr><td class="empty">Add a deposit to see balances.</td></tr></tbody>`;
+ {const W=wds(),wOk=W.filter(w=>w.status==="successful"),wPn=W.filter(w=>w.status==="pending"),sum=a=>a.reduce((x,w)=>x+w.amount,0);
+  const worth=bal+pendBal+wAll,growth=dep?(worth-dep)/dep*100:null,rec=dep?wAll/dep*100:null,cf=wAll-dep;
+  const big=W.reduce((m,w)=>Math.max(m,w.amount),0),last=W.slice().sort((a,b)=>b.at.localeCompare(a.at))[0];
+  const pc=v=>v==null?"—":(v>0?"+":"")+v.toFixed(1)+"%";
+  const gk=k("Growth On Deposits",pc(growth),`${money(worth)} Total Value vs ${money(dep)} Deposited<div class="cnt"><div><b>${money(wAll)}</b>Total Withdrawn · ${W.length}</div><div><b class="pos">${money(sum(wOk))}</b>Successful · ${wOk.length}</div><div><b style="color:var(--pend)">${money(sum(wPn))}</b>Pending · ${wPn.length}</div></div>`,growth>0?"pos":growth<0?"neg":"").replace('class="card kpi"','class="card kpi" style="grid-column:span 2"');
+  $("#kpis").insertAdjacentHTML("beforeend",gk+k("Deposits Recovered",rec==null?"—":rec.toFixed(1)+"%","Withdrawn ÷ Deposited")+k("Net Cash Flow",sgn(cf),"Withdrawn − Deposited",cf>0?"pos":cf<0?"neg":"")+k("Avg Withdrawal",money(W.length?wAll/W.length:0),`Largest ${money(big)}`)+k("Last Withdrawal",last?money(last.amount):"—",last?`${fmtDT(last.at)} · ${esc(last.bank)}`:"No withdrawals yet"));}
+ const pb={};const row=p=>pb[p]=pb[p]||{d:0,n:0,s:0,w:0};
+ deps().forEach(d=>row(d.platform).d+=d.amount);wds().forEach(w=>row(w.platform).w+=w.amount);B.forEach(b=>{const r=row(b.platform);b.status==="pending"?r.s+=b.stake:r.n+=pl(b)});
+ const pk2=Object.keys(pb).sort((a,b)=>(pb[b].d+pb[b].n-pb[b].s-pb[b].w)-(pb[a].d+pb[a].n-pb[a].s-pb[a].w));
+ $("#pbal").innerHTML=pk2.length?`<thead><tr><th>Platform</th><th>Deposited</th><th>Withdrawn</th><th>Net P/L</th><th>Balance</th></tr></thead><tbody>`+pk2.map(p=>{const r=pb[p],v=r.d+r.n-r.s-r.w;return`<tr><td>${esc(p)}</td><td>${money(r.d)}</td><td>${r.w?money(r.w):"—"}</td><td class="${r.n>0?"pos":r.n<0?"neg":""}">${sgn(r.n)}</td><td class="${v>0?"pos":v<0?"neg":""}"><b>${money(v)}</b></td></tr>`}).join("")+"</tbody>":`<tbody><tr><td class="empty">Add a deposit to see balances.</td></tr></tbody>`;
  if(typeof Chart==="undefined")return;
  charts.forEach(c=>c.destroy());charts=[];
  if(!Chart.registry.plugins.get("barLabels")){
@@ -288,14 +340,22 @@ Chart.register(barLabels);
  mk("#c5",{type:"bar",data:{labels:dk,datasets:[{data:dk.map(k=>dp[k]),backgroundColor:blue,borderRadius:6}]},options:base});
  const bp={};B.filter(b=>bs(b)>0).forEach(b=>bp[b.platform]=(bp[b.platform]||0)+bs(b));const bpk=Object.keys(bp);
  mk("#c6",{type:"bar",data:{labels:bpk,datasets:[{data:bpk.map(k=>bp[k]),backgroundColor:pend,borderRadius:6}]},options:base});
+ const mf={};deps().forEach(d=>{const k=d.date.slice(0,7);(mf[k]=mf[k]||{d:0,w:0}).d+=d.amount});wds().forEach(w=>{const k=wd(w).slice(0,7);(mf[k]=mf[k]||{d:0,w:0}).w+=w.amount});const mfk=Object.keys(mf).sort();
+ mk("#c7",{type:"bar",data:{labels:mfk,datasets:[{label:"Deposited",data:mfk.map(k=>mf[k].d),backgroundColor:blue,borderRadius:6},{label:"Withdrawn",data:mfk.map(k=>mf[k].w),backgroundColor:win,borderRadius:6}]},options:{...base,plugins:{legend:{display:true,labels:{boxWidth:12}},tooltip:{callbacks:{label:c=>" "+c.dataset.label+": "+money(c.parsed.y)}}}}});
+ const wb={};wds().forEach(w=>wb[w.bank]=(wb[w.bank]||0)+w.amount);const wbk=Object.keys(wb);
+ mk("#c8",{type:"bar",data:{labels:wbk,datasets:[{data:wbk.map(k=>wb[k]),backgroundColor:win,borderRadius:6}]},options:base});
 }
 
 /* ---------- forms ---------- */
 const uid=()=>crypto.randomUUID();
 const fd=f=>Object.fromEntries(new FormData(f));
-const bf=$("#bf"),df=$("#df");
+const bf=$("#bf"),df=$("#df"),wf=$("#wf");
 function resetB(){editB=null;bf.reset();bf.platform.value="Football.com";bf.source.value="balance";bf.betDate.value=today();$("#bsave").textContent="Add bet";$("#bcancel").classList.add("hide");prev()}
 function resetD(){editD=null;df.reset();df.date.value=today();$("#dsave").textContent="Add deposit";$("#dcancel").classList.add("hide")}
+function resetW(){editW=null;wf.reset();wf.at.value=nowLocal();wf.platform.value="Football.com";wf.status.value="pending";$("#wsave").textContent="Add Withdrawal";$("#wcancel").classList.add("hide");wprev()}
+function wprev(){const a=+wf.amount.value,old=editW&&D.find(x=>x.id===editW),av=balance()+(old?old.amount:0);
+ $("#wprev").innerHTML=a>0?`Balance after this withdrawal: <b class="${av-a>=0?"pos":"neg"}">${money(av-a)}</b>`:"Withdrawals come off your balance as soon as you save them, even while pending."}
+wf.addEventListener("input",wprev);
 function prev(){
  const s=+bf.stake.value,o=+bf.odds.value,x=+bf.bonus.value||0,co=bf.status.value==="cashout";
  $("#colab").classList.toggle("hide",!co);const mx=bf.source.value==="mixed";$("#bslab").classList.toggle("hide",!mx);bf.bonusStake.required=mx;bf.cashout.required=co;
@@ -312,20 +372,28 @@ bf.addEventListener("submit",e=>{e.preventDefault();const v=fd(bf);
  resetB()});
 df.addEventListener("submit",e=>{e.preventDefault();const v=fd(df);
  store.put({id:editD||uid(),kind:"dep",amount:+v.amount,date:v.date,platform:v.platform.trim(),bank:v.bank.trim()});resetD()});
-$("#bcancel").onclick=resetB;$("#dcancel").onclick=resetD;
+wf.addEventListener("submit",e=>{e.preventDefault();const v=fd(wf),amt=+v.amount;
+ if(!(amt>0)){alert("Enter an amount greater than 0.");return}
+ if(!/^\d{6}$/.test(v.acct)){alert("Enter exactly the last 6 digits of the bank account.");return}
+ const old=editW&&D.find(x=>x.id===editW),avail=balance()+(old?old.amount:0);
+ if(amt>avail&&!confirm("This is more than your current balance ("+money(avail)+"). Save it anyway?"))return;
+ store.put({id:editW||uid(),kind:"wd",amount:amt,at:v.at,platform:v.platform.trim(),bank:v.bank.trim(),acct:v.acct,status:v.status});resetW()});
+$("#bcancel").onclick=resetB;$("#dcancel").onclick=resetD;$("#wcancel").onclick=resetW;
 
 document.addEventListener("click",e=>{
- const x=e.target.closest("[data-x]"),ed=e.target.closest("[data-e]");
+ const x=e.target.closest("[data-x]"),ed=e.target.closest("[data-e]"),ok=e.target.closest("[data-ok]");
+ if(ok){const o=D.find(i=>i.id===ok.dataset.ok);if(o)store.put({...o,status:"successful"});return}
  if(x){const t=D.find(i=>i.id===x.dataset.x);if(t&&t.kind==="bet"&&t.status!=="pending"){alert("Settled bets can’t be deleted.");return}}
  if(x&&confirm("Delete this entry?"))store.del(x.dataset.x);
  if(ed){const o=D.find(i=>i.id===ed.dataset.e);if(!o)return;
   if(o.kind==="bet"&&o.status!=="pending"){alert("Settled bets can’t be edited.");return}
   if(o.kind==="bet"){editB=o.id;for(const k of["platform","stake","odds","bonus","cashout","betDate","status","settledDate"])bf[k].value=o[k]??"";{const x=bs(o);bf.source.value=x<=0?"balance":x>=o.stake?"bonus":"mixed";bf.bonusStake.value=x>0&&x<o.stake?x:""}prev();bf.settledDate.value=o.settledDate||bf.settledDate.value;$("#bsave").textContent="Save changes";$("#bcancel").classList.remove("hide");bf.scrollIntoView({behavior:"smooth",block:"center"})}
+  else if(o.kind==="wd"){editW=o.id;for(const k of["amount","at","platform","bank","acct","status"])wf[k].value=o[k];$("#wsave").textContent="Save changes";$("#wcancel").classList.remove("hide");wprev();wf.scrollIntoView({behavior:"smooth",block:"center"})}
   else{editD=o.id;for(const k of["amount","date","platform","bank"])df[k].value=o[k];$("#dsave").textContent="Save changes";$("#dcancel").classList.remove("hide");df.scrollIntoView({behavior:"smooth",block:"center"})}}
 });
 $("#nav").onclick=e=>{const t=e.target.dataset.t;if(!t)return;
  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b===e.target));
- ["report","bets","deps"].forEach(s=>$("#"+s).classList.toggle("hide",s!==t));if(t==="report")renderReport()};
+ ["report","bets","deps","wds"].forEach(s=>$("#"+s).classList.toggle("hide",s!==t));if(t==="report")renderReport()};
 function openList(c,q,toggle){
  const l=c.querySelector(".cl");
  if(toggle&&!l.classList.contains("hide")){l.classList.add("hide");return}
@@ -339,5 +407,5 @@ document.addEventListener("click",e=>{
  else if(b)openList(b.closest(".combo"),"",true);
 });
 document.addEventListener("input",e=>{const i=e.target;if(i.dataset&&i.dataset.list)openList(i.closest(".combo"),i.value)});
-resetB();resetD();init();
+resetB();resetD();resetW();init();
 </script></body></html>
