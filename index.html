@@ -19,8 +19,9 @@ h1 span{color:var(--win)}
 nav{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px}
 nav button{border:0;background:none;color:var(--mute);padding:8px 16px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer}
 nav button.on{background:var(--win);color:#fff}
-nav{flex:1;min-width:0;overflow-x:auto}nav button{white-space:nowrap}nav button.so{margin-left:auto;color:var(--loss)}
-.tl{display:flex;align-items:center;gap:10px}.tl .btn{padding:8px 12px;line-height:1}
+nav{flex:1;min-width:0;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;white-space:nowrap;font-size:13px;padding:8px 10px}nav button.so{margin-left:auto;color:var(--loss)}
+@media(min-width:560px){nav button{font-size:15px;padding:8px 16px}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
 .kpi .l{color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
@@ -65,7 +66,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 <form id="af"><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="current-password" required></label><div id="amsg"></div><button class="btn" id="ain">Sign in</button><button type="button" class="btn g" id="aup">Create account</button></form></div></div>
 <div class="wrap hide" id="app">
 <header>
- <div class="top"><div class="tl"><button type="button" class="btn g" id="navt" aria-controls="nav" aria-expanded="true" aria-label="Hide menu">☰</button><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div></div>
+ <div class="top"><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
  <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">Deposits + P/L − Pending − Withdrawals</div><div class="bd"><span>Yesterday Start Bal:</span> <b id="ysb">₦0</b></div><div class="bd"><span>Today Start Bal:</span> <b id="tsb">₦0</b></div><div class="bd"><span>Yesterday Change:</span> <b id="ych">₦0</b></div><div class="bd"><span>Today So Far:</span> <b id="tsf">₦0</b></div></div></div>
  <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button><button data-t="wds">Withdrawals</button><button type="button" id="out" class="so">Sign out</button></nav></div>
 </header>
@@ -396,10 +397,6 @@ document.addEventListener("click",e=>{
   else if(o.kind==="wd"){editW=o.id;for(const k of["amount","at","platform","bank","acct","status"])wf[k].value=o[k];$("#wsave").textContent="Save changes";$("#wcancel").classList.remove("hide");wprev();wf.scrollIntoView({behavior:"smooth",block:"center"})}
   else{editD=o.id;for(const k of["amount","date","platform","bank"])df[k].value=o[k];$("#dsave").textContent="Save changes";$("#dcancel").classList.remove("hide");df.scrollIntoView({behavior:"smooth",block:"center"})}}
 });
-const NAVK="betNavHidden";
-function navHide(h){$(".bar").classList.toggle("hide",h);const b=$("#navt");b.setAttribute("aria-expanded",String(!h));b.setAttribute("aria-label",h?"Show menu":"Hide menu");try{localStorage.setItem(NAVK,h?"1":"")}catch(_){}}
-$("#navt").onclick=()=>navHide(!$(".bar").classList.contains("hide"));
-try{if(localStorage.getItem(NAVK)==="1")navHide(true)}catch(_){}
 $("#nav").onclick=e=>{const t=e.target.dataset.t;if(!t)return;
  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b===e.target));
  ["report","bets","deps","wds"].forEach(s=>$("#"+s).classList.toggle("hide",s!==t));if(t==="report")renderReport()};
