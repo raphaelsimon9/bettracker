@@ -278,7 +278,7 @@ function filtW(){
 }
 function renderWds(){
  const r=filtW().sort((a,b)=>b.at.localeCompare(a.at));
- $("#wtb").innerHTML=r.length?r.map(w=>`<tr><td>${fmtDT(w.at)}</td><td>${money(w.amount)}</td><td>${esc(w.platform)}</td><td>${esc(w.bank)}</td><td>•••• ${esc(w.acct)}</td><td><span class="pill ${w.status}">${w.status==="successful"?"Successful":"Pending"}</span></td><td>${w.status==="pending"?`<button class="ic" data-ok="${w.id}">Mark Successful</button>`:""}${w.status==="pending"?`<button class="ic" data-e="${w.id}">Edit</button><button class="ic" data-x="${w.id}">Delete</button>`:`<button class="ic" disabled style="opacity:.4">Locked</button>`}</td></tr>`).join(""):`<tr><td colspan="7" class="empty">${wds().length?"No withdrawals match these filters.":"No withdrawals yet."}</td></tr>`;
+ $("#wtb").innerHTML=r.length?r.map(w=>`<tr><td>${fmtDT(w.at)}</td><td>${money(w.amount)}</td><td>${esc(w.platform)}</td><td>${esc(w.bank)}</td><td>•••• ${esc(w.acct)}</td><td><span class="pill ${w.status}">${w.status==="successful"?"Successful":"Pending"}</span></td><td>${w.status==="pending"?`<button class="ic" data-ok="${w.id}">Mark Successful</button>`:""}${w.status==="pending"?`<button class="ic" data-e="${w.id}">Edit</button><button class="ic" data-x="${w.id}">Delete</button>`:`<span class="pill successful">Successful</span>`}</td></tr>`).join(""):`<tr><td colspan="7" class="empty">${wds().length?"No withdrawals match these filters.":"No withdrawals yet."}</td></tr>`;
  wprev();
 }
 function renderReport(){
