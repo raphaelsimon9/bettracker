@@ -19,6 +19,8 @@ h1 span{color:var(--win)}
 nav{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px}
 nav button{border:0;background:none;color:var(--mute);padding:8px 16px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer}
 nav button.on{background:var(--win);color:#fff}
+nav{flex:1;min-width:0;overflow-x:auto}nav button{white-space:nowrap}nav button.so{margin-left:auto;color:var(--loss)}
+.tl{display:flex;align-items:center;gap:10px}.tl .btn{padding:8px 12px;line-height:1}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
 .kpi .l{color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
@@ -63,10 +65,9 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 <form id="af"><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="current-password" required></label><div id="amsg"></div><button class="btn" id="ain">Sign in</button><button type="button" class="btn g" id="aup">Create account</button></form></div></div>
 <div class="wrap hide" id="app">
 <header>
- <div class="top"><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div>
+ <div class="top"><div class="tl"><button type="button" class="btn g" id="navt" aria-controls="nav" aria-expanded="true" aria-label="Hide menu">☰</button><div><h1>Bet <span>Tracker</span></h1><div class="sub" id="sync">Loading…</div></div></div>
  <div class="balbox"><div class="bl">Balance</div><div class="bv" id="hbal">₦0</div><div class="bs">Deposits + P/L − Pending − Withdrawals</div><div class="bd"><span>Yesterday Start Bal:</span> <b id="ysb">₦0</b></div><div class="bd"><span>Today Start Bal:</span> <b id="tsb">₦0</b></div><div class="bd"><span>Yesterday Change:</span> <b id="ych">₦0</b></div><div class="bd"><span>Today So Far:</span> <b id="tsf">₦0</b></div></div></div>
- <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button><button data-t="wds">Withdrawals</button></nav>
- <button class="btn g" id="out">Sign out</button></div>
+ <div class="bar"><nav id="nav"><button data-t="report" class="on">Report</button><button data-t="bets">Bets</button><button data-t="deps">Deposits</button><button data-t="wds">Withdrawals</button><button type="button" id="out" class="so">Sign out</button></nav></div>
 </header>
 
 <section id="report">
@@ -171,6 +172,7 @@ async function pull(){
 const fail=r=>{alert("Couldn’t save: "+r.error.message);pull()};
 const store={
  async put(o){
+  const cur=D.find(x=>x.id===o.id);if(cur&&cur.kind==="wd"&&cur.status==="successful"){alert("Successful withdrawals are locked and can’t be edited or deleted.");return}
   const i=D.findIndex(x=>x.id===o.id);i<0?D.push(o):D[i]=o;render();
   const r=o.kind==="bet"
    ?await SB.from("bets").upsert({id:o.id,platform:o.platform,stake:o.stake,odds:o.odds,bonus:o.bonus||0,cashout:o.cashout??null,bet_date:o.betDate,bonus_stake:o.bonusStake||0,status:o.status,settled_date:o.settledDate||null})
@@ -180,7 +182,7 @@ const store={
   if(r.error)fail(r);
  },
  async del(id){
-  const o=D.find(x=>x.id===id);if(!o)return;D=D.filter(x=>x.id!==id);render();
+  const o=D.find(x=>x.id===id);if(!o)return;if(o.kind==="wd"&&o.status==="successful"){alert("Successful withdrawals are locked and can’t be edited or deleted.");return}D=D.filter(x=>x.id!==id);render();
   const r=await SB.from(o.kind==="bet"?"bets":o.kind==="wd"?"withdrawals":"deposits").delete().eq("id",id);if(r.error)fail(r);
  }
 };
@@ -275,7 +277,7 @@ function filtW(){
 }
 function renderWds(){
  const r=filtW().sort((a,b)=>b.at.localeCompare(a.at));
- $("#wtb").innerHTML=r.length?r.map(w=>`<tr><td>${fmtDT(w.at)}</td><td>${money(w.amount)}</td><td>${esc(w.platform)}</td><td>${esc(w.bank)}</td><td>•••• ${esc(w.acct)}</td><td><span class="pill ${w.status}">${w.status==="successful"?"Successful":"Pending"}</span></td><td>${w.status==="pending"?`<button class="ic" data-ok="${w.id}">Mark Successful</button>`:""}<button class="ic" data-e="${w.id}">Edit</button><button class="ic" data-x="${w.id}">Delete</button></td></tr>`).join(""):`<tr><td colspan="7" class="empty">${wds().length?"No withdrawals match these filters.":"No withdrawals yet."}</td></tr>`;
+ $("#wtb").innerHTML=r.length?r.map(w=>`<tr><td>${fmtDT(w.at)}</td><td>${money(w.amount)}</td><td>${esc(w.platform)}</td><td>${esc(w.bank)}</td><td>•••• ${esc(w.acct)}</td><td><span class="pill ${w.status}">${w.status==="successful"?"Successful":"Pending"}</span></td><td>${w.status==="pending"?`<button class="ic" data-ok="${w.id}">Mark Successful</button>`:""}${w.status==="pending"?`<button class="ic" data-e="${w.id}">Edit</button><button class="ic" data-x="${w.id}">Delete</button>`:`<button class="ic" disabled style="opacity:.4">Locked</button>`}</td></tr>`).join(""):`<tr><td colspan="7" class="empty">${wds().length?"No withdrawals match these filters.":"No withdrawals yet."}</td></tr>`;
  wprev();
 }
 function renderReport(){
@@ -376,21 +378,28 @@ wf.addEventListener("submit",e=>{e.preventDefault();const v=fd(wf),amt=+v.amount
  if(!(amt>0)){alert("Enter an amount greater than 0.");return}
  if(!/^\d{6}$/.test(v.acct)){alert("Enter exactly the last 6 digits of the bank account.");return}
  const old=editW&&D.find(x=>x.id===editW),avail=balance()+(old?old.amount:0);
+ if(old&&old.status==="successful"){alert("Successful withdrawals are locked and can’t be edited or deleted.");resetW();return}
+ if(v.status==="successful"&&!confirm("Successful withdrawals are locked and can’t be edited or deleted afterwards. Save as successful?"))return;
  if(amt>avail&&!confirm("This is more than your current balance ("+money(avail)+"). Save it anyway?"))return;
  store.put({id:editW||uid(),kind:"wd",amount:amt,at:v.at,platform:v.platform.trim(),bank:v.bank.trim(),acct:v.acct,status:v.status});resetW()});
 $("#bcancel").onclick=resetB;$("#dcancel").onclick=resetD;$("#wcancel").onclick=resetW;
 
 document.addEventListener("click",e=>{
  const x=e.target.closest("[data-x]"),ed=e.target.closest("[data-e]"),ok=e.target.closest("[data-ok]");
- if(ok){const o=D.find(i=>i.id===ok.dataset.ok);if(o)store.put({...o,status:"successful"});return}
- if(x){const t=D.find(i=>i.id===x.dataset.x);if(t&&t.kind==="bet"&&t.status!=="pending"){alert("Settled bets can’t be deleted.");return}}
+ if(ok){const o=D.find(i=>i.id===ok.dataset.ok);if(o&&o.status==="pending"&&confirm("Mark this withdrawal as successful? It will be locked and can’t be edited or deleted afterwards."))store.put({...o,status:"successful"});return}
+ if(x){const t=D.find(i=>i.id===x.dataset.x);if(t&&t.kind==="bet"&&t.status!=="pending"){alert("Settled bets can’t be deleted.");return}if(t&&t.kind==="wd"&&t.status==="successful"){alert("Successful withdrawals are locked and can’t be edited or deleted.");return}}
  if(x&&confirm("Delete this entry?"))store.del(x.dataset.x);
  if(ed){const o=D.find(i=>i.id===ed.dataset.e);if(!o)return;
   if(o.kind==="bet"&&o.status!=="pending"){alert("Settled bets can’t be edited.");return}
+  if(o.kind==="wd"&&o.status==="successful"){alert("Successful withdrawals are locked and can’t be edited or deleted.");return}
   if(o.kind==="bet"){editB=o.id;for(const k of["platform","stake","odds","bonus","cashout","betDate","status","settledDate"])bf[k].value=o[k]??"";{const x=bs(o);bf.source.value=x<=0?"balance":x>=o.stake?"bonus":"mixed";bf.bonusStake.value=x>0&&x<o.stake?x:""}prev();bf.settledDate.value=o.settledDate||bf.settledDate.value;$("#bsave").textContent="Save changes";$("#bcancel").classList.remove("hide");bf.scrollIntoView({behavior:"smooth",block:"center"})}
   else if(o.kind==="wd"){editW=o.id;for(const k of["amount","at","platform","bank","acct","status"])wf[k].value=o[k];$("#wsave").textContent="Save changes";$("#wcancel").classList.remove("hide");wprev();wf.scrollIntoView({behavior:"smooth",block:"center"})}
   else{editD=o.id;for(const k of["amount","date","platform","bank"])df[k].value=o[k];$("#dsave").textContent="Save changes";$("#dcancel").classList.remove("hide");df.scrollIntoView({behavior:"smooth",block:"center"})}}
 });
+const NAVK="betNavHidden";
+function navHide(h){$(".bar").classList.toggle("hide",h);const b=$("#navt");b.setAttribute("aria-expanded",String(!h));b.setAttribute("aria-label",h?"Show menu":"Hide menu");try{localStorage.setItem(NAVK,h?"1":"")}catch(_){}}
+$("#navt").onclick=()=>navHide(!$(".bar").classList.contains("hide"));
+try{if(localStorage.getItem(NAVK)==="1")navHide(true)}catch(_){}
 $("#nav").onclick=e=>{const t=e.target.dataset.t;if(!t)return;
  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b===e.target));
  ["report","bets","deps","wds"].forEach(s=>$("#"+s).classList.toggle("hide",s!==t));if(t==="report")renderReport()};
