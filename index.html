@@ -72,6 +72,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 </header>
 
 <section id="report">
+ <div class="fsum" style="margin:0 0 12px;justify-content:flex-end"><button type="button" class="btn g sm" data-export-all>Export All Data</button></div>
  <div class="kpis" id="kpis"></div>
  <div class="grid">
   <div class="card wide"><h3>Cumulative Profit / Loss</h3><div class="ch tall"><canvas id="c1"></canvas></div></div>
@@ -237,7 +238,7 @@ const dAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return new Date(d-d.g
 function inDate(x,f){const t=today();if(f.date==="today")return x===t;if(f.date==="7d")return x>=dAgo(6);if(f.date==="month")return x.slice(0,7)===t.slice(0,7);if(f.date==="custom")return(!f.from||x>=f.from)&&(!f.to||x<=f.to);return true}
 const sel=(g,k,label,cur,opts)=>`<label>${label}<select data-g="${g}" data-k="${k}">${opts.map(([v,t])=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
 const dsel=(g,f)=>sel(g,"date","Date",f.date,[["all","All Time"],["today","Today"],["7d","Last 7 Days"],["month","This Month"],["custom","Custom Range"]])+(f.date==="custom"?`<label>From<input type="date" data-g="${g}" data-k="from" value="${f.from}"></label><label>To<input type="date" data-g="${g}" data-k="to" value="${f.to}"></label>`:"");
-const fsum=(g,t,on)=>`<div class="sub fsum"><span>${t}</span>${on?`<button type="button" class="btn g sm" data-clear="${g}">Clear Filters</button>`:""}</div>`;
+const fsum=(g,t,on)=>`<div class="sub fsum"><span>${t}</span><span style="display:flex;gap:8px;flex-wrap:wrap">${on?`<button type="button" class="btn g sm" data-clear="${g}">Clear Filters</button>`:""}<button type="button" class="btn g sm" data-export="${g}" data-f="${on?1:0}">${on?"Export Filtered":"Export All"}</button></span></div>`;
 function filtB(){
  const f=F.b,B=bets(),pls=OPT.pl.filter(p=>B.some(b=>b.platform===p));
  if(f.plat!=="all"&&!pls.includes(f.plat))f.plat="all";
@@ -259,6 +260,36 @@ function filtD(){
 }
 document.addEventListener("change",e=>{const t=e.target,g=t.dataset&&t.dataset.g;if(!g)return;F[g][t.dataset.k]=t.value;renderBets();renderDeps();renderWds()});
 document.addEventListener("click",e=>{const c=e.target.closest("[data-clear]");if(!c)return;F[c.dataset.clear]=F0()[c.dataset.clear];renderBets();renderDeps();renderWds()});
+/* ---------- export (CSV, opens in Excel / Google Sheets) ---------- */
+const csvQ=v=>{v=v==null?"":String(v);return/[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+const csvTx=v=>{v=String(v==null?"":v);return/^[=+\-@\t\r]/.test(v)?"'"+v:v};
+const csvRows=(head,rows)=>[head,...rows].map(r=>r.map(csvQ).join(",")).join("\r\n");
+const num=n=>Math.round((+n||0)*100)/100;
+const STAT={won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"};
+const fund=b=>bs(b)<=0?"Main Balance":balS(b)<=0?"Platform Bonus":money(balS(b))+" Balance + "+money(bs(b))+" Bonus";
+const byDesc=k=>(a,b)=>String(b[k]).localeCompare(String(a[k]));
+const EXP={
+ b:{name:"bets",head:["Bet Date","Platform","Wagered","Balance Stake","Bonus Stake","Funded From","Odds","Bonus Win","Result","Win Amount","Potential Win","Profit/Loss","Settled Date"],
+  row:b=>{const p=b.status==="pending";return[b.betDate,csvTx(b.platform),num(b.stake),num(balS(b)),num(bs(b)),fund(b),(+b.odds).toFixed(2),num(b.bonus),STAT[b.status],b.status==="won"?num(winAmt(b)):b.status==="cashout"?num(b.cashout):"",p?num(winAmt(b)):"",p?"":num(pl(b)),p?"":sd(b)]},
+  all:()=>bets().sort(byDesc("betDate")),flt:()=>filtB().sort(byDesc("betDate"))},
+ d:{name:"deposits",head:["Date","Amount","Platform","Bank"],
+  row:d=>[d.date,num(d.amount),csvTx(d.platform),csvTx(d.bank)],
+  all:()=>deps().sort(byDesc("date")),flt:()=>filtD().sort(byDesc("date"))},
+ w:{name:"withdrawals",head:["Date","Time","Amount","Withdrawn From","Bank","Account (Last 6)","Status"],
+  row:w=>[wd(w),w.at.slice(11,16),num(w.amount),csvTx(w.platform),csvTx(w.bank),'="'+w.acct+'"',w.status==="successful"?"Successful":"Pending"],
+  all:()=>wds().sort(byDesc("at")),flt:()=>filtW().sort(byDesc("at"))}
+};
+function dl(name,text){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\uFEFF"+text],{type:"text/csv;charset=utf-8"}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function exportCSV(g,filtered){const e=EXP[g],rows=filtered?e.flt():e.all();
+ if(!rows.length){alert("Nothing to export.");return}
+ dl(`bet-tracker-${e.name}-${filtered?"filtered":"all"}-${today()}.csv`,csvRows(e.head,rows.map(e.row)))}
+function exportAll(){
+ const B=bets(),net=B.filter(b=>b.status!=="pending").reduce((a,b)=>a+pl(b),0),pend=B.filter(b=>b.status==="pending").reduce((a,b)=>a+balS(b),0);
+ const sum="SUMMARY\r\n"+csvRows(["Metric","Value"],[["Exported On",today()],["Total Deposited",num(deps().reduce((a,d)=>a+d.amount,0))],["Total Withdrawn",num(wTot())],["Net Profit/Loss",num(net)],["Pending Stakes",num(pend)],["Current Balance",num(balance())]]);
+ const secs=Object.values(EXP).map(e=>{const r=e.all();return e.name.toUpperCase()+" ("+r.length+")\r\n"+csvRows(e.head,r.map(e.row))});
+ dl(`bet-tracker-all-data-${today()}.csv`,[sum,...secs].join("\r\n\r\n"))}
+document.addEventListener("click",e=>{const x=e.target.closest("[data-export]");if(x){exportCSV(x.dataset.export,x.dataset.f==="1");return}
+ if(e.target.closest("[data-export-all]"))exportAll()});
 function renderBets(){
  const r=filtB().sort((a,b)=>b.betDate.localeCompare(a.betDate));
  $("#btb").innerHTML=r.length?r.map(b=>{const p=pl(b);return`<tr><td>${b.betDate}</td><td>${esc(b.platform)}</td><td>${money(b.stake)}</td><td>${bs(b)<=0?"Main Balance":balS(b)<=0?"Platform Bonus":money(balS(b))+" Balance + "+money(bs(b))+" Bonus"}</td><td>${(+b.odds).toFixed(2)}</td><td>${b.bonus?money(b.bonus):"—"}</td><td><span class="pill ${b.status}">${({won:"Won",lost:"Lost",pending:"Pending",cashout:"Cashed out"})[b.status]}</span></td><td>${b.status==="won"?money(winAmt(b)):b.status==="cashout"?money(b.cashout||0)+" (cash-out)":b.status==="pending"?`<span style="color:var(--pend)">${money(winAmt(b))}</span> (Potential)`:"—"}</td><td class="${p>0?"pos":p<0?"neg":""}">${b.status==="pending"?"—":sgn(p)}</td><td>${b.status==="pending"?"—":sd(b)}</td><td>${b.status==="pending"?`<button class="ic" data-e="${b.id}">Edit</button>`:`<button class="ic" disabled style="opacity:.4">Settled</button>`}${b.status==="pending"?`<button class="ic" data-x="${b.id}">Delete</button>`:""}</td></tr>`}).join(""):`<tr><td colspan="11" class="empty">${bets().length?"No bets match these filters.":"No bets yet. Add your first one above."}</td></tr>`;
